@@ -77,6 +77,11 @@ func (b *QuoteBot) ChatLine() {
 			components[0][1:strings.Index(components[0], "!")], //nick
 			strings.TrimSpace(components[3][1:]))               //message
 	}
+	
+	if components[1] == "INVITE" {
+		fmt.Fprintf(b.Conn, "JOIN %s\n", components[3][1:])
+		fmt.Print("Invited to channel ", components[3][1:])
+	}
 }
 
 func (b *QuoteBot) processChatMsg(channel, sender, message string) {
