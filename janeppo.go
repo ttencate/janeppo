@@ -265,16 +265,22 @@ func (b *QuoteBot) processChatMsg(channel, sender, message string) {
 	}
 	
 	//Various easter eggs - add more!
-	if strings.Index(message, "!butterfly") == 0 {
-		go func() {
-			time.Sleep(300 * time.Second)
-			if rand.Float32() < 0.5 {
-				fmt.Fprintf(b.Conn, "KICK %s %s :%s\n", channel, sender,
-					"Je vlinder heeft helaas een orkaan veroorzaakt")
-			} else {
+	if strings.Index(message, "!butterfly") == 0 && channel != sender {
+		if rand.Float32() < 0.5 {
+		  go func() {
+			  time.Sleep(120 * time.Second)
+			  fmt.Fprintf(b.Conn, "KICK %s %s :%s\n", channel, sender,
+				  "Je vlinder heeft helaas een orkaan veroorzaakt")
+      }()
+      fmt.Printf("Going to kick %s from %s in two minutes", sender, channel)
+		} else {
+		  go func() {
+			  time.Sleep(120 * time.Second)
 				fmt.Fprintf(b.Conn, "MODE %s +o %s\n", channel, sender)
-			}
-		}()
+      }()
+      fmt.Printf("Going to give ops to %s in %s in two minutes", 
+        sender, channel)
+		}
 		return
 	}
 
