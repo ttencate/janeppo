@@ -181,6 +181,14 @@ func (b *QuoteBot) processChatMsg(channel, sender, message string) {
 	if strings.Index(message, "!college") == 0 {
 		fmt.Fprintf(b.Conn, "PRIVMSG %s :Ik geef helaas geen colleges meer, "+
 			"ik ben met pensioen!\n", channel)
+    return
+	}
+	if strings.Index(message, "!collage") == 0 {
+    i := rand.Intn(len(b.Qdb))
+		fmt.Fprintf(b.Conn,
+			"PRIVMSG %s :Mijn collega %s zou zeggen: \"%s\"\n",
+			channel, b.Qdb[i].Text, b.Qdb[i].Name)
+		return
 	}
 
 	//Support for removing quotes after adding them
@@ -243,6 +251,26 @@ func (b *QuoteBot) processChatMsg(channel, sender, message string) {
 	if strings.Index(message, b.Nickname+": verdwijn") == 0 {
 		fmt.Fprintf(b.Conn, "QUIT :Ik ga al\n")
 		panic("Shoo'd!")
+	}
+	
+	//Allow for entering raw irc commands in a query
+	if strings.Index(message, "!raw ") == 0 && channel == sender {
+		fmt.Fprintf(b.Conn, "%s\n", message[5:])
+		return
+	}
+	
+	//Various easter eggs - add more!
+	if strings.Index(message, "!butterfly") == 0 {
+		go func() {
+			time.Sleep(300 * time.Second)
+			if rand.Float32() < 0.5 {
+				fmt.Fprintf(b.Conn, "KICK %s %s :%s\n", channel, sender,
+					"Je vlinder heeft helaas een orkaan veroorzaakt")
+			} else {
+				fmt.Fprintf(b.Conn, "MODE %s +o %s\n", channel, sender)
+			}
+		}()
+		return
 	}
 
 	//Generic response
