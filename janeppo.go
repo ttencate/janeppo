@@ -72,21 +72,27 @@ func (b *QuoteBot) ChatLine() {
 		fmt.Print("Replying to a ping message from ", components[1])
 	}
   
-  if len(components) < 4 {
-    //This really shouldn't happen, but it does, so let's log it at least
-    fmt.Println("WARNING: the line below seems to be malformed (components)")
-    fmt.Println(line)
-    fmt.Fprintf(b.Conn, "PRIVMSG erik :HALP\n")
-    return
-  }
-  
 	if components[1] == "PRIVMSG" {
+    if len(components) < 4 {
+      //This really shouldn't happen, but it does, so let's log it at least
+      fmt.Println("WARNING: the line below seems to be malformed (components)")
+      fmt.Println(line)
+      fmt.Fprintf(b.Conn, "PRIVMSG erik :HALP\n")
+      return
+    }
 		b.processChatMsg(components[2], //channel or query
 			components[0][1:strings.Index(components[0], "!")], //nick
 			strings.TrimSpace(components[3][1:]))               //message
 	}
 	
 	if components[1] == "INVITE" {
+    if len(components) < 4 {
+      //This really shouldn't happen, but it does, so let's log it at least
+      fmt.Println("WARNING: the line below seems to be malformed (components)")
+      fmt.Println(line)
+      fmt.Fprintf(b.Conn, "PRIVMSG erik :HALP\n")
+      return
+    }
 		fmt.Fprintf(b.Conn, "JOIN %s\n", components[3][1:])
 		fmt.Print("Invited to channel ", components[3][1:])
 	}
