@@ -245,6 +245,10 @@ func (b *QuoteBot) processChatMsg(channel, sender, message string) {
 		fmt.Fprintf(b.Conn, "PRIVMSG %s :GANG!!!\n", channel)
 		return
 	}
+	if strings.Index(strings.ToLower(message), "lazer") >= 0 {
+		fmt.Fprintf(b.Conn, "PRIVMSG %s :LAZERS!\n", channel)
+		return
+	}
 
 	if message == "!sikknel" {
 		fmt.Fprintf(b.Conn, "PRIVMSG %s :PRIO 1 8091 4132 4133 PLANETENLAAN 100 "+
