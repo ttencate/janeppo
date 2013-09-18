@@ -269,7 +269,12 @@ func (b *QuoteBot) processChatMsg(channel, sender, message string) {
 	}
 	
 	//Various easter eggs - add more!
-	if strings.Index(message, "!butterfly") == 0 && channel != sender {
+	if strings.Index(message, "!butterfly") == 0 {
+    if channel == sender {
+      fmt.Fprintf(b.Conn, "PRIVMSG %s :Dat werkt alleen in een kanaal\n",
+        sender)
+      return
+    }
 		if rand.Float32() < 0.5 {
 		  go func() {
 			  time.Sleep(120 * time.Second)
