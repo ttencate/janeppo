@@ -373,16 +373,19 @@ func (b *QuoteBot) processChatMsg(channel, sender, message string) {
 			}()
 			fmt.Printf("Going to kick %s from %s in two minutes\n", sender, channel)
 		} else {
-			go func() {
-				time.Sleep(120 * time.Second)
-				fmt.Fprintf(b.Conn, "NAMES %s\n", channel)
-				line, _ := b.Reader.ReadString('\n')
-				if strings.Contains(line, "@"+sender) {
+			fmt.Fprintf(b.Conn, "NAMES %s\n", channel)
+			line, _ := b.Reader.ReadString('\n')
+			if strings.Contains(line, "@"+sender) {
+				go func() {
+					time.Sleep(120 * time.Second)
 					fmt.Fprintf(b.Conn, "MODE %s -o %s\n", channel, sender)
-				} else {
+				}()
+			} else {
+				go func() {
+					time.Sleep(120 * time.Second)
 					fmt.Fprintf(b.Conn, "MODE %s +o %s\n", channel, sender)
-				}
-			}()
+				}()
+			}
 			fmt.Printf("Going to toggle ops for %s in %s in two minutes\n",
 				sender, channel)
 		}
