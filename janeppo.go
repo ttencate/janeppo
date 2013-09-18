@@ -9,6 +9,8 @@ import (
 	"net"
 	"strings"
 	"time"
+  "net/http"
+  "code.google.com/p/go.net/html"
 )
 
 const (
@@ -269,8 +271,8 @@ func (b *QuoteBot) processChatMsg(channel, sender, message string) {
 
   //P2K scanner
 	if message == "!sikknel" {
-		fmt.Fprintf(b.Conn, "PRIVMSG %s :PRIO 1 8091 4132 4133 PLANETENLAAN 100 "+
-			"GRON Uitslaande brand\n", channel)
+    //This may take a bit long, so we start a separate thread for it
+    go b.ReportP2k(channel)
 		return
 	}
 
@@ -351,6 +353,44 @@ func (b *QuoteBot) processChatMsg(channel, sender, message string) {
 		fmt.Fprintf(b.Conn, "PRIVMSG %s :%s\n", channel, replies[i])
 		return
 	}
+}
+
+//This scanner connects to a P2000 site, parses it, and sends the first entry
+//containing "P #" (# in 1, 2) to the channel.
+func (b *QuoteBot) ReportP2k(channel string) {
+  resp, err :=
+    http.Get("http://www.p2000zhz-rr.nl/p2000-brandweer-groningen.html")
+  defer resp.Body.Close()
+  if err != nil {
+    fmt.Println("Error in HTTP-get,", err)
+    return
+  }
+  doc, err := html.Parse(resp.Body)
+  if err != nil {
+    fmt.Println("Error in html parser,", err)
+    return
+  }
+  //Now, make a function to recurse the tree (depth-first)
+  var findReport func(n *html.Node) string
+  findReport = func(n *html.Node) string {
+    if n.Type == html.ElementNode && n.Data == "p" &&
+      len(n.Attr) > 0 && n.Attr[0].Val == "bericht" {
+      report := n.FirstChild.Data
+      if strings.Contains(report, "P 1") || strings.Contains(report, "P 2") {
+        return report
+      }
+    }
+    for child := n.FirstChild; child != nil; child = child.NextSibling {
+      report := findReport(child)
+      if report != "" { return report }
+    }
+    return ""
+  }
+  report := findReport(doc)
+  if report == "" { return }
+  report = strings.Replace(report, "\n", " ", -1)
+  report = strings.Replace(report, "\r", " ", -1)
+  fmt.Fprintf(b.Conn, "PRIVMSG %s :%s\n", channel, report)
 }
 
 func IrcConnect(nick, ircchan, server string) (net.Conn, *bufio.Reader) {
