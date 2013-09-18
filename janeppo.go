@@ -209,6 +209,9 @@ func (b *QuoteBot) processChatMsg(channel, sender, message string) {
 			channel, b.Qdb[i].Text, b.Qdb[i].Name)
 		return
 	}
+  if strings.Index(message, "!janeppo") == 0 {
+    b.processChatMsg(channel, sender, "!collega ikzelf")
+  }
 
 	//Support for removing quotes after adding them
 	if message == "!undo" {
@@ -264,6 +267,7 @@ func (b *QuoteBot) processChatMsg(channel, sender, message string) {
 		return
 	}
 
+  //P2K scanner
 	if message == "!sikknel" {
 		fmt.Fprintf(b.Conn, "PRIVMSG %s :PRIO 1 8091 4132 4133 PLANETENLAAN 100 "+
 			"GRON Uitslaande brand\n", channel)
