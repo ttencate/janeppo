@@ -1,0 +1,18 @@
+To compile JanEppo, you need net/html, which is currently in development and not
+in the main distro.
+
+To get it, 
+	go get "code.google.com/p/go.net/html"
+
+Now if you're on my machine, go get will download this, but then complain about
+io.ErrNoProgress not existing. If you're like me, you do not feel like solving
+this problem the elegant way and getting all kinds of funky bleeding-edge
+versions of packages. The alternative is to edit
+	[/usr/lib/go]/src/pkg/code.google.com/p/go.net/html/token.go
+The part between brackets may be different on your machine, it's GOROOT as
+returned by `go env'.  You can search for io.ErrNoProgress and replace it by nil
+(or a more sensible value you have thought about). This will work fine for our
+purposes.
+
+When you are done, you should be able to build the project; html will be
+compiled as part of it and (hopefully) work as intended.
