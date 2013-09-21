@@ -16,6 +16,9 @@ import (
 const (
 	Verbose   = true
 	Quotefile = "collega.txt"
+	Nickname  = "JanEppo"
+	IrcChan   = "#brak"
+	IrcServ   = "irc.frozenfractal.com:6667"
 )
 
 type Quote struct {
@@ -25,33 +28,40 @@ type Quote struct {
 type QuoteBot struct {
 	Nickname string
 	Qdb      []Quote
-	Conn     net.Conn
 	Reader   *bufio.Reader
+	Output   chan string
 	InitLen  int
 }
 
 func main() {
 	quotes := LoadQuotes()
-	//eppo := CreateBot("JanErik", "#bottest", "irc.frozenfractal.com:6667", quotes)
-	eppo := CreateBot("JanEppo", "#brak", "irc.frozenfractal.com:6667", quotes)
-	defer eppo.Conn.Close()
+	conn, reader := IrcConnect(Nickname, IrcChan, IrcServ)
+	ircSend := make(chan string)
+
+	eppo := CreateBot(Nickname, IrcChan, reader, ircSend, quotes)
+	defer conn.Close()
+	go eppo.ChatContinuous()
 
 	rand.Seed(time.Now().Unix())
 
 	for {
-		eppo.ChatLine()
+		outLine := <-ircSend
+		fmt.Fprintf(conn, "%s\n", outLine)
 	}
 }
 
-func CreateBot(nickname, channel, server string, qdb []Quote) *QuoteBot {
-	conn, io := IrcConnect(nickname, channel, server)
+func CreateBot(nickname, channel string, reader *bufio.Reader, output chan string, qdb []Quote) *QuoteBot {
 	return &QuoteBot{
 		Nickname: nickname,
 		Qdb:      qdb,
-		Conn:     conn,
-		Reader:   io,
+		Reader:   reader,
+		Output:   output,
 		InitLen:  len(qdb),
 	}
+}
+
+func (b *QuoteBot) ChatContinuous() {
+	for { b.ChatLine() }
 }
 
 func (b *QuoteBot) ChatLine() {
@@ -70,7 +80,7 @@ func (b *QuoteBot) ChatLine() {
 
 	//Test if this is a ping message
 	if components[0] == "PING" {
-		fmt.Fprintf(b.Conn, "PONG %s\n", components[1])
+		b.Output <- fmt.Sprintf("PONG %s", components[1])
 		fmt.Print("Replying to a ping message from ", components[1])
 	}
 
@@ -79,7 +89,7 @@ func (b *QuoteBot) ChatLine() {
 			//This really shouldn't happen, but it does, so let's log it at least
 			fmt.Println("WARNING: the line below seems to be malformed (components)")
 			fmt.Println(line)
-			fmt.Fprintf(b.Conn, "PRIVMSG erik :HALP\n")
+			b.Output <- fmt.Sprintf("PRIVMSG erik :HALP")
 			return
 		}
 		b.processChatMsg(components[2], //channel or query
@@ -92,10 +102,10 @@ func (b *QuoteBot) ChatLine() {
 			//This really shouldn't happen, but it does, so let's log it at least
 			fmt.Println("WARNING: the line below seems to be malformed (components)")
 			fmt.Println(line)
-			fmt.Fprintf(b.Conn, "PRIVMSG erik :HALP\n")
+			b.Output <- fmt.Sprintf("PRIVMSG erik :HALP")
 			return
 		}
-		fmt.Fprintf(b.Conn, "JOIN %s\n", components[3][1:])
+		b.Output <- fmt.Sprintf("JOIN %s\n", components[3][1:])
 		fmt.Print("Invited to channel ", components[3][1:])
 	}
 }
@@ -127,14 +137,13 @@ func (b *QuoteBot) processChatMsg(channel, sender, message string) {
 		}
 
 		if len(fdb) == 0 {
-			fmt.Fprintf(b.Conn, "PRIVMSG %s :Die collega herinner ik me niet.\n",
+			b.Output <- fmt.Sprintf("PRIVMSG %s :Die collega herinner ik me niet.",
 				channel)
 			return
 		}
 
 		i := rand.Intn(len(fdb))
-		fmt.Fprintf(b.Conn,
-			"PRIVMSG %s :Mijn collega %s zou zeggen: \"%s\"\n",
+		b.Output <- fmt.Sprintf("PRIVMSG %s :Mijn collega %s zou zeggen: \"%s\"",
 			channel, fdb[i].Name, fdb[i].Text)
 		return
 	}
@@ -152,17 +161,14 @@ func (b *QuoteBot) processChatMsg(channel, sender, message string) {
 		fdb := ApplyFilter(b.Qdb, filter)
 
 		if len(fdb) == 0 {
-			fmt.Fprintf(b.Conn,
-				"PRIVMSG %s :Ik ken niemand die zoiets onfatsoenlijks zou "+
-					"zeggen.\n",
-				channel)
+			b.Output <- fmt.Sprintf("PRIVMSG %s :Ik ken niemand die zoiets " +
+					"onfatsoenlijks zou zeggen.", channel)
 			return
 		}
 
 		i := rand.Intn(len(fdb))
-		fmt.Fprintf(b.Conn,
-			"PRIVMSG %s :Mijn collega %s zou inderdaad zeggen: \"%s\"\n",
-			channel, fdb[i].Name, fdb[i].Text)
+		b.Output <- fmt.Sprintf("PRIVMSG %s :Mijn collega %s zou inderdaad " +
+			"zeggen: \"%s\"", channel, fdb[i].Name, fdb[i].Text)
 		return
 	}
 
@@ -177,12 +183,10 @@ func (b *QuoteBot) processChatMsg(channel, sender, message string) {
 			strings.Count(quote[1], "\"") > 0 ||
 			len(strings.TrimSpace(quote[0])) == 0 ||
 			len(strings.TrimSpace(quote[1])) == 0 {
-			fmt.Fprintf(b.Conn,
-				"PRIVMSG %s :Daar snap ik helemaal niets van.\n",
+			b.Output <- fmt.Sprintf("PRIVMSG %s :Daar snap ik helemaal niets van.",
 				channel)
-			fmt.Fprintf(b.Conn,
-				"PRIVMSG %s :!addquote Naam[, activiteit,]: Blaat\n",
-				sender)
+			b.Output <- fmt.Sprintf("PRIVMSG %s :!addquote Naam[, activiteit,]: "+
+				"Blaat", sender)
 			return
 		}
 		quote[0] = strings.TrimSpace(quote[0])
@@ -190,9 +194,8 @@ func (b *QuoteBot) processChatMsg(channel, sender, message string) {
 
 		b.Qdb = append(b.Qdb, Quote{Name: quote[0], Text: quote[1]})
 		fmt.Printf("Adding quote to QDB.\n  %s: %s\n", quote[0], quote[1])
-		fmt.Fprintf(b.Conn,
-			"PRIVMSG %s :Als ik je goed begrijp, zou %s het volgende "+
-				"zeggen: \"%s\".\n",
+		b.Output <- fmt.Sprintf("PRIVMSG %s :Als ik je goed begrijp, zou %s het "+
+				"volgende zeggen: \"%s\".",
 			channel, quote[0], quote[1])
 		b.SaveQuotes()
 		return
@@ -200,14 +203,13 @@ func (b *QuoteBot) processChatMsg(channel, sender, message string) {
 
 	//Failed !collega
 	if strings.Index(message, "!college") == 0 {
-		fmt.Fprintf(b.Conn, "PRIVMSG %s :Ik geef helaas geen colleges meer, "+
-			"ik ben met pensioen!\n", channel)
+		b.Output <- fmt.Sprintf("PRIVMSG %s :Ik geef helaas geen colleges meer, "+
+			"ik ben met pensioen!", channel)
 		return
 	}
 	if strings.Index(message, "!collage") == 0 {
 		i := rand.Intn(len(b.Qdb))
-		fmt.Fprintf(b.Conn,
-			"PRIVMSG %s :Mijn collega %s zou zeggen: \"%s\"\n",
+		b.Output <- fmt.Sprintf("PRIVMSG %s :Mijn collega %s zou zeggen: \"%s\"",
 			channel, b.Qdb[i].Text, b.Qdb[i].Name)
 		return
 	}
@@ -218,17 +220,13 @@ func (b *QuoteBot) processChatMsg(channel, sender, message string) {
 	//Support for removing quotes after adding them
 	if message == "!undo" {
 		if b.InitLen >= len(b.Qdb) {
-			fmt.Fprintf(b.Conn,
-				"PRIVMSG %s :Je hebt nog helemaal niks gedaan, luiwammes.\n",
-				channel)
+			b.Output <- fmt.Sprintf("PRIVMSG %s :Je hebt nog helemaal niks gedaan, " +
+				"+luiwammes.", channel)
 			return
 		}
-		fmt.Fprintf(b.Conn,
-			"PRIVMSG %s :Ik ken een collega die nog wel een tip voor je "+
-				"heeft.\n",
-			channel)
-		fmt.Fprintf(b.Conn,
-			"PRIVMSG %s :!addquote %s: %s\n",
+		b.Output <- fmt.Sprintf("PRIVMSG %s :Ik ken een collega die nog wel een " +
+				"tip voor je heeft.", channel)
+		b.Output <- fmt.Sprintf("PRIVMSG %s :!addquote %s: %s",
 			sender, b.Qdb[len(b.Qdb)-1].Name, b.Qdb[len(b.Qdb)-1].Text)
 		ndb := make([]Quote, len(b.Qdb)-1, len(b.Qdb)-1)
 		copy(ndb, b.Qdb)
@@ -243,8 +241,7 @@ func (b *QuoteBot) processChatMsg(channel, sender, message string) {
 		if sender == "piet" || sender == "Eggie" {
 			size += 0.3
 		}
-		fmt.Fprintf(b.Conn,
-			"PRIVMSG %s :%3.14f cm 8%s)\n",
+		b.Output <- fmt.Sprintf("PRIVMSG %s :%3.14f cm 8%s)",
 			channel, size*50, strings.Repeat("=", 1+int(size*10)))
 		return
 	}
@@ -253,19 +250,18 @@ func (b *QuoteBot) processChatMsg(channel, sender, message string) {
 		if sender == "ijbema" {
 			size += 0.3
 		}
-		fmt.Fprintf(b.Conn,
-			"PRIVMSG %s :%3.14f cm -_-%s\n",
+		b.Output <- fmt.Sprintf("PRIVMSG %s :%3.14f cm -_-%s",
 			channel, size*50, strings.Repeat(";", 1+int(size*10)))
 		return
 	}
 
 	//GANG!!!
 	if strings.Index(message, "gang") == 0 {
-		fmt.Fprintf(b.Conn, "PRIVMSG %s :GANG!!!\n", channel)
+		b.Output <- fmt.Sprintf("PRIVMSG %s :GANG!!!", channel)
 		return
 	}
 	if strings.Index(strings.ToLower(message), "lazer") >= 0 {
-		fmt.Fprintf(b.Conn, "PRIVMSG %s :LAZERS!\n", channel)
+		b.Output <- fmt.Sprintf("PRIVMSG %s :LAZERS!", channel)
 		return
 	}
 
@@ -338,68 +334,68 @@ func (b *QuoteBot) processChatMsg(channel, sender, message string) {
 		}
 		for _, r := range results {
 			if strings.Contains(r, query) {
-				fmt.Fprintf(b.Conn, "PRIVMSG %s :%s\n", channel, r)
+				b.Output <- fmt.Sprintf("PRIVMSG %s :%s", channel, r)
 				return
 			}
 		}
-		fmt.Fprintf(b.Conn, "PRIVMSG %s :Dat gebouw stond er voor mijn pensioen "+
-			"nog niet, geloof ik.", channel)
+		b.Output <- fmt.Sprintf("PRIVMSG %s :Dat gebouw stond er voor mijn "+
+			"pensioen nog niet, geloof ik.", channel)
 	}
 
 	//Panic command
 	if strings.Index(message, b.Nickname+": verdwijn") == 0 {
-		fmt.Fprintf(b.Conn, "QUIT :Ik ga al\n")
+		b.Output <- fmt.Sprintf("QUIT :Ik ga al")
 		panic("Shoo'd!")
 	}
 
 	//Allow for entering raw irc commands in a query
 	if strings.Index(message, "!raw ") == 0 && channel == sender {
-		fmt.Fprintf(b.Conn, "%s\n", message[5:])
+		b.Output <- fmt.Sprintf("%s", message[5:])
 		return
 	}
 
 	if strings.Index(message, "!ops") == 0 && channel != sender {
-		fmt.Fprintf(b.Conn, "MODE %s +o %s\n", channel, sender)
+		b.Output <- fmt.Sprintf("MODE %s +o %s", channel, sender)
 		return
 	}
 
 	//Various easter eggs - add more!
 	if strings.Index(message, "!butterfly") == 0 {
 		if channel == sender {
-			fmt.Fprintf(b.Conn, "PRIVMSG %s :Dat werkt alleen in een kanaal\n",
+			b.Output <- fmt.Sprintf("PRIVMSG %s :Dat werkt alleen in een kanaal",
 				sender)
 			return
 		}
 		if rand.Float32() < 0.5 {
 			go func() {
 				time.Sleep(120 * time.Second)
-				fmt.Fprintf(b.Conn, "KICK %s %s :%s\n", channel, sender,
+				b.Output <- fmt.Sprintf("KICK %s %s :%s", channel, sender,
 					"Je vlinder heeft helaas een orkaan veroorzaakt")
 			}()
 			fmt.Printf("Going to kick %s from %s in two minutes\n", sender, channel)
 		} else {
-			fmt.Fprintf(b.Conn, "NAMES %s\n", channel)
+			b.Output <- fmt.Sprintf("NAMES %s", channel)
 			line, _ := b.Reader.ReadString('\n')
 			if strings.Contains(line, "@"+sender) {
 				go func() {
 					time.Sleep(120 * time.Second)
-					fmt.Fprintf(b.Conn, "MODE %s -o %s\n", channel, sender)
+					b.Output <- fmt.Sprintf("MODE %s -o %s", channel, sender)
 				}()
 			} else {
 				go func() {
 					time.Sleep(120 * time.Second)
-					fmt.Fprintf(b.Conn, "MODE %s +o %s\n", channel, sender)
+					b.Output <- fmt.Sprintf("MODE %s +o %s", channel, sender)
 				}()
 			}
-			fmt.Printf("Going to toggle ops for %s in %s in two minutes\n",
+			fmt.Printf("Going to toggle ops for %s in %s in two minutes",
 				sender, channel)
 		}
 		return
 	}
 	if strings.Index(message, "!sl") == 0 {
-		fmt.Fprintf(b.Conn, "PRIVMSG %s : _||__|  |  ______   ______ \n", channel)
-		fmt.Fprintf(b.Conn, "PRIVMSG %s :(        | |      | |      |\n", channel)
-		fmt.Fprintf(b.Conn, "PRIVMSG %s :/-()---() ~ ()--() ~ ()--() \n", channel)
+		b.Output <- fmt.Sprintf("PRIVMSG %s : _||__|  |  ______   ______ ", channel)
+		b.Output <- fmt.Sprintf("PRIVMSG %s :(        | |      | |      |", channel)
+		b.Output <- fmt.Sprintf("PRIVMSG %s :/-()---() ~ ()--() ~ ()--() ", channel)
 		return
 	}
 
@@ -428,7 +424,7 @@ func (b *QuoteBot) processChatMsg(channel, sender, message string) {
 			"Ik denk dat het iets met priemgetallen te maken heeft.",
 		}
 		i := rand.Intn(len(replies))
-		fmt.Fprintf(b.Conn, "PRIVMSG %s :%s\n", channel, replies[i])
+		b.Output <- fmt.Sprintf("PRIVMSG %s :%s", channel, replies[i])
 		return
 	}
 }
@@ -472,7 +468,7 @@ func (b *QuoteBot) ReportP2k(channel string) {
 	}
 	report = strings.Replace(report, "\n", " ", -1)
 	report = strings.Replace(report, "\r", " ", -1)
-	fmt.Fprintf(b.Conn, "PRIVMSG %s :%s\n", channel, report)
+	b.Output <- fmt.Sprintf("PRIVMSG %s :%s", channel, report)
 }
 
 func IrcConnect(nick, ircchan, server string) (net.Conn, *bufio.Reader) {
