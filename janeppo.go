@@ -358,6 +358,11 @@ func (b *QuoteBot) processChatMsg(channel, sender, message string) {
 		return
 	}
 
+	if strings.Index(message, "!ops") == 0 && channel != sender {
+		fmt.Fprintf(b.Conn, "MODE %s +o %s\n", channel, sender)
+		return
+	}
+
 	//Various easter eggs - add more!
 	if strings.Index(message, "!butterfly") == 0 {
 		if channel == sender {
