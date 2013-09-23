@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"bufio"
 	"github.com/mrjones/oauth"
+	"code.google.com/p/gcfg"
 )
 
 type Tweet struct {
@@ -16,8 +17,8 @@ type Tweet struct {
 }
 
 type TwitterBot struct {
-	InputStream *bufio.Reader
-	Output      chan string
+	Input  *bufio.Reader
+	Output chan string
 }
 
 type Config struct {
@@ -32,7 +33,11 @@ type Config struct {
 func main() {
 	var cfg Config
 	err := gcfg.ReadFileInto(&cfg, "twitter.ini")
-  b := CreateBot(cfg.Oauth.CnsKey, cfg.Oauth.CnsSecret, cnf.Twitter.Follow,
+	if err != nil {
+		fmt.Println("twb: Error reading config,", err)
+		return
+	}
+  b := CreateBot(cfg.Oauth.CnsKey, cfg.Oauth.CnsSecret, cfg.Twitter.Follow,
 		make(chan string))
 	go b.ReadContinuous()
 	for {fmt.Println(<-b.Output)}
@@ -52,7 +57,7 @@ func CreateBot(CnsKey, CnsSecret, Twits string, OutputChannel chan string) *Twit
 	requestToken, url, err := c.GetRequestTokenAndUrl("oob")
 	if err != nil {
 		fmt.Println("twb: An error occurred when requesting the token,", err)
-		return
+		return nil
 	}
 	//authenticate, make request
 	fmt.Println("twb: (1) Go to: " + url)
@@ -64,7 +69,7 @@ func CreateBot(CnsKey, CnsSecret, Twits string, OutputChannel chan string) *Twit
 	accessToken, err := c.AuthorizeToken(requestToken, verificationCode)
 	if err != nil {
 		fmt.Println("twb: An error occurred while validating your code,", err)
-		return
+		return nil
 	}
 
 	//open stream for reading
@@ -77,15 +82,15 @@ func CreateBot(CnsKey, CnsSecret, Twits string, OutputChannel chan string) *Twit
 	stream := bufio.NewReader(response.Body)
 	
 	return &TwitterBot{
-		InputStream: stream,
-		Output:      OutputChannel,
+		Input:  stream,
+		Output: OutputChannel,
 	}
 }
 
 func (b *TwitterBot) ReadContinuous() {
 	for {
 		//Read a tweet
-		line, err := stream.ReadString('\n')
+		line, err := b.Input.ReadString('\n')
 		if err != nil {
 			fmt.Println("twb: --- Err in stream:", err, "---")
 			fmt.Println("twb: Press enter to continue, C-c to back out.")
@@ -106,7 +111,7 @@ func (b *TwitterBot) ReadContinuous() {
 		}
 		
 		//Print tweet to sdout
-		if len(tweet.Name.Sname) > 0 && len(tweet.Text) > 0 {
+		if len(tweet.User.SName) > 0 && len(tweet.Text) > 0 {
 			b.Output <- fmt.Sprintf("[@%s] %s", tweet.User.SName, tweet.Text)
 		}
 	}
