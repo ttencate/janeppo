@@ -1,7 +1,9 @@
 package main
 
 import (
+	"./twitterbot"
 	"bufio"
+	"code.google.com/p/gcfg"
 	"code.google.com/p/go.net/html"
 	"encoding/json"
 	"fmt"
@@ -34,6 +36,7 @@ type QuoteBot struct {
 }
 
 func main() {
+	//Prepare the QuoteBot
 	quotes := LoadQuotes()
 	conn, reader := IrcConnect(Nickname, IrcChan, IrcServ)
 	ircSend := make(chan string)
@@ -44,9 +47,25 @@ func main() {
 
 	rand.Seed(time.Now().Unix())
 
+	//Prepare the Twitterbot
+	var cfg twitterbot.Config
+	err := gcfg.ReadFileInto(&cfg, "twitter.ini")
+	if err != nil {
+		fmt.Println("Error reading twitter config,", err)
+		return
+	}
+	twitterSend := make(chan string)
+	tb := twitterbot.CreateBot(cfg.Oauth.CnsKey, cfg.Oauth.CnsSecret,
+		cfg.Twitter.Follow, twitterSend)
+	go tb.ReadContinuous()
+
 	for {
-		outLine := <-ircSend
-		fmt.Fprintf(conn, "%s\n", outLine)
+		select {
+		case outLine := <-ircSend:
+			fmt.Fprintf(conn, "%s\n", outLine)
+		case outLine := <-twitterSend:
+			fmt.Fprintf(conn, "PRIVMSG %s :%s\n", IrcChan, outLine)
+		}
 	}
 }
 
@@ -61,7 +80,9 @@ func CreateBot(nickname, channel string, reader *bufio.Reader, output chan strin
 }
 
 func (b *QuoteBot) ChatContinuous() {
-	for { b.ChatLine() }
+	for {
+		b.ChatLine()
+	}
 }
 
 func (b *QuoteBot) ChatLine() {
@@ -161,13 +182,13 @@ func (b *QuoteBot) processChatMsg(channel, sender, message string) {
 		fdb := ApplyFilter(b.Qdb, filter)
 
 		if len(fdb) == 0 {
-			b.Output <- fmt.Sprintf("PRIVMSG %s :Ik ken niemand die zoiets " +
-					"onfatsoenlijks zou zeggen.", channel)
+			b.Output <- fmt.Sprintf("PRIVMSG %s :Ik ken niemand die zoiets "+
+				"onfatsoenlijks zou zeggen.", channel)
 			return
 		}
 
 		i := rand.Intn(len(fdb))
-		b.Output <- fmt.Sprintf("PRIVMSG %s :Mijn collega %s zou inderdaad " +
+		b.Output <- fmt.Sprintf("PRIVMSG %s :Mijn collega %s zou inderdaad "+
 			"zeggen: \"%s\"", channel, fdb[i].Name, fdb[i].Text)
 		return
 	}
@@ -195,7 +216,7 @@ func (b *QuoteBot) processChatMsg(channel, sender, message string) {
 		b.Qdb = append(b.Qdb, Quote{Name: quote[0], Text: quote[1]})
 		fmt.Printf("Adding quote to QDB.\n  %s: %s\n", quote[0], quote[1])
 		b.Output <- fmt.Sprintf("PRIVMSG %s :Als ik je goed begrijp, zou %s het "+
-				"volgende zeggen: \"%s\".",
+			"volgende zeggen: \"%s\".",
 			channel, quote[0], quote[1])
 		b.SaveQuotes()
 		return
@@ -220,12 +241,12 @@ func (b *QuoteBot) processChatMsg(channel, sender, message string) {
 	//Support for removing quotes after adding them
 	if message == "!undo" {
 		if b.InitLen >= len(b.Qdb) {
-			b.Output <- fmt.Sprintf("PRIVMSG %s :Je hebt nog helemaal niks gedaan, " +
+			b.Output <- fmt.Sprintf("PRIVMSG %s :Je hebt nog helemaal niks gedaan, "+
 				"+luiwammes.", channel)
 			return
 		}
-		b.Output <- fmt.Sprintf("PRIVMSG %s :Ik ken een collega die nog wel een " +
-				"tip voor je heeft.", channel)
+		b.Output <- fmt.Sprintf("PRIVMSG %s :Ik ken een collega die nog wel een "+
+			"tip voor je heeft.", channel)
 		b.Output <- fmt.Sprintf("PRIVMSG %s :!addquote %s: %s",
 			sender, b.Qdb[len(b.Qdb)-1].Name, b.Qdb[len(b.Qdb)-1].Text)
 		ndb := make([]Quote, len(b.Qdb)-1, len(b.Qdb)-1)

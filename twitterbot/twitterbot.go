@@ -1,19 +1,19 @@
 package twitterbot
 
 import (
-	"fmt"
-	"encoding/json"
 	"bufio"
-	"github.com/mrjones/oauth"
 	"code.google.com/p/gcfg"
+	"encoding/json"
+	"fmt"
+	"github.com/mrjones/oauth"
 )
 
 type Tweet struct {
-	User struct{
+	User struct {
 		Name  string "name"
 		SName string "screen_name"
 	}
-	Text   string "text"
+	Text string "text"
 }
 
 type TwitterBot struct {
@@ -37,10 +37,12 @@ func main() {
 		fmt.Println("twb: Error reading config,", err)
 		return
 	}
-  b := CreateBot(cfg.Oauth.CnsKey, cfg.Oauth.CnsSecret, cfg.Twitter.Follow,
+	b := CreateBot(cfg.Oauth.CnsKey, cfg.Oauth.CnsSecret, cfg.Twitter.Follow,
 		make(chan string))
 	go b.ReadContinuous()
-	for {fmt.Println(<-b.Output)}
+	for {
+		fmt.Println(<-b.Output)
+	}
 }
 
 func CreateBot(CnsKey, CnsSecret, Twits string, OutputChannel chan string) *TwitterBot {
@@ -52,7 +54,7 @@ func CreateBot(CnsKey, CnsSecret, Twits string, OutputChannel chan string) *Twit
 			RequestTokenUrl:   "http://api.twitter.com/oauth/request_token",
 			AuthorizeTokenUrl: "https://api.twitter.com/oauth/authorize",
 			AccessTokenUrl:    "https://api.twitter.com/oauth/access_token",
-	})
+		})
 	//open twitter connection
 	requestToken, url, err := c.GetRequestTokenAndUrl("oob")
 	if err != nil {
@@ -65,7 +67,7 @@ func CreateBot(CnsKey, CnsSecret, Twits string, OutputChannel chan string) *Twit
 	fmt.Println("twb: (3) Enter that verification code here: ")
 	verificationCode := ""
 	fmt.Scanln(&verificationCode)
-	
+
 	accessToken, err := c.AuthorizeToken(requestToken, verificationCode)
 	if err != nil {
 		fmt.Println("twb: An error occurred while validating your code,", err)
@@ -80,7 +82,7 @@ func CreateBot(CnsKey, CnsSecret, Twits string, OutputChannel chan string) *Twit
 		fmt.Println("twb: An error occurred while accessing the stream,", err)
 	}
 	stream := bufio.NewReader(response.Body)
-	
+
 	return &TwitterBot{
 		Input:  stream,
 		Output: OutputChannel,
@@ -100,7 +102,7 @@ func (b *TwitterBot) ReadContinuous() {
 			continue
 		}
 		fmt.Println("debug:", line)
-		
+
 		//Parse tweet
 		var tweet Tweet
 		jErr := json.Unmarshal([]byte(line), &tweet)
@@ -109,11 +111,10 @@ func (b *TwitterBot) ReadContinuous() {
 			fmt.Println("twb: Press enter to continue, C-c to back out.")
 			fmt.Scanln()
 		}
-		
+
 		//Print tweet to sdout
 		if len(tweet.User.SName) > 0 && len(tweet.Text) > 0 {
 			b.Output <- fmt.Sprintf("[@%s] %s", tweet.User.SName, tweet.Text)
 		}
 	}
 }
-
