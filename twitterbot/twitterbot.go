@@ -108,8 +108,6 @@ func (b *TwitterBot) ReadContinuous() {
 		jErr := json.Unmarshal([]byte(line), &tweet)
 		if jErr != nil {
 			fmt.Println("twb: --- Err parsing stream:", jErr, "---")
-			fmt.Println("twb: Press enter to continue, C-c to back out.")
-			fmt.Scanln()
 		}
 
 		//Print tweet to sdout
