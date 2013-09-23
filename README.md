@@ -13,7 +13,7 @@ Now if you're on my machine, go get will download this, but then complain about 
 
 	[/usr/lib/go]/src/pkg/code.google.com/p/go.net/html/token.go
 
-The part between brackets may be different on your machine, it's `GOROOT` as returned by `go env`.  You can search for `io.ErrNoProgress` and replace it by nil (or a more sensible value you have thought about). This will work fine for our purposes.
+The part between brackets may be different on your machine, it's `GOROOT` as returned by `go env`.  You can search for `io.ErrNoProgress` and replace it by `nil` (or a more sensible value you have thought about). This will work fine for our purposes.
 
 When you are done, you should be able to build the project; `html` will be compiled as part of it and (hopefully) work as intended.
 
