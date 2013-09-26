@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"code.google.com/p/gcfg"
 	"encoding/json"
+	"ioutil"
 	"fmt"
 	"github.com/mrjones/oauth"
 )
@@ -22,22 +23,25 @@ type TwitterBot struct {
 }
 
 type Config struct {
-	Oauth struct {
-		CnsKey, CnsSecret string
-	}
-	Twitter struct {
-		Follow string
-	}
+	CnsKey, CnsSecret, Follow string
+	AccessToken *oauth.AccessToken
 }
 
 func main() {
-	var cfg Config
-	err := gcfg.ReadFileInto(&cfg, "twitter.ini")
-	if err != nil {
-		fmt.Println("twb: Error reading config,", err)
-		return
+	jsonBlob, ioErr := ioutil.ReadFile("twitter.json")
+	if ioErr != nil {
+		fmt.Printf("Error opening file %s: %s\n", "twitter.json", ioErr)
+		panic("File could not be opened")
 	}
-	b := CreateBot(cfg.Oauth.CnsKey, cfg.Oauth.CnsSecret, cfg.Twitter.Follow,
+
+	var cfg Config
+	jsonErr := json.Unmarshal(jsonBlob, &cfg)
+	if jsonErr != nil {
+		fmt.Printf("Error parsing file %s: %s\n", "twitter.json", jsonErr)
+		panic("Couldn't fetch config from file")
+	}
+	
+	b := CreateBot(cfg.CnsKey, cfg.CnsSecret, cfg.Follow,
 		make(chan string))
 	go b.ReadContinuous()
 	for {
