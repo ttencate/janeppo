@@ -13,16 +13,16 @@ type Config struct {
 }
 
 func main() {
-	jsonBlob, ioErr := ioutil.ReadFile("../twitter.json")
+	jsonBlob, ioErr := ioutil.ReadFile("../../twitter.json")
 	if ioErr != nil {
-		fmt.Printf("Error opening file %s: %s\n", "../twitter.json", ioErr)
+		fmt.Printf("Error opening file %s: %s\n", "../../twitter.json", ioErr)
 		return
 	}
 
 	var cfg Config
 	jsonErr := json.Unmarshal(jsonBlob, &cfg)
 	if jsonErr != nil {
-		fmt.Printf("Error parsing file %s: %s\n", "../twitter.json", jsonErr)
+		fmt.Printf("Error parsing file %s: %s\n", "../../twitter.json", jsonErr)
 		return
 	}
 	
@@ -64,7 +64,7 @@ func main() {
 		fmt.Printf("Error converting to json: %s\n", jsonErr)
 		return
 	}
-	err = ioutil.WriteFile("../twitter.json", jsonBlob, 0600)
+	err = ioutil.WriteFile("../../twitter.json", jsonBlob, 0600)
 	if err != nil {
 		fmt.Printf("Error saving file, %s\n", err)
 	}
