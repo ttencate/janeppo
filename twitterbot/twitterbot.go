@@ -2,9 +2,8 @@ package twitterbot
 
 import (
 	"bufio"
-	"code.google.com/p/gcfg"
 	"encoding/json"
-	"ioutil"
+	"io/ioutil"
 	"fmt"
 	"github.com/mrjones/oauth"
 )
@@ -28,64 +27,46 @@ type Config struct {
 }
 
 func main() {
-	jsonBlob, ioErr := ioutil.ReadFile("twitter.json")
+	jsonBlob, ioErr := ioutil.ReadFile("../twitter.json")
 	if ioErr != nil {
-		fmt.Printf("Error opening file %s: %s\n", "twitter.json", ioErr)
+		fmt.Printf("Error opening file %s: %s\n", "../twitter.json", ioErr)
 		panic("File could not be opened")
 	}
 
 	var cfg Config
 	jsonErr := json.Unmarshal(jsonBlob, &cfg)
 	if jsonErr != nil {
-		fmt.Printf("Error parsing file %s: %s\n", "twitter.json", jsonErr)
+		fmt.Printf("Error parsing file %s: %s\n", "../twitter.json", jsonErr)
 		panic("Couldn't fetch config from file")
 	}
 	
-	b := CreateBot(cfg.CnsKey, cfg.CnsSecret, cfg.Follow,
-		make(chan string))
+	b := CreateBot(&cfg, make(chan string))
 	go b.ReadContinuous()
 	for {
 		fmt.Println(<-b.Output)
 	}
 }
 
-func CreateBot(CnsKey, CnsSecret, Twits string, OutputChannel chan string) *TwitterBot {
+func CreateBot(cfg *Config, OutputChannel chan string) *TwitterBot {
 	//prepare oAuth data
 	c := oauth.NewConsumer(
-		CnsKey,
-		CnsSecret,
+		cfg.CnsKey,
+		cfg.CnsSecret,
 		oauth.ServiceProvider{
 			RequestTokenUrl:   "http://api.twitter.com/oauth/request_token",
 			AuthorizeTokenUrl: "https://api.twitter.com/oauth/authorize",
 			AccessTokenUrl:    "https://api.twitter.com/oauth/access_token",
 		})
-	//open twitter connection
-	requestToken, url, err := c.GetRequestTokenAndUrl("oob")
-	if err != nil {
-		fmt.Println("twb: An error occurred when requesting the token,", err)
-		return nil
-	}
-	//authenticate, make request
-	fmt.Println("twb: (1) Go to: " + url)
-	fmt.Println("twb: (2) Grant access, you should get back a verification code.")
-	fmt.Println("twb: (3) Enter that verification code here: ")
-	verificationCode := ""
-	fmt.Scanln(&verificationCode)
-
-	accessToken, err := c.AuthorizeToken(requestToken, verificationCode)
-	if err != nil {
-		fmt.Println("twb: An error occurred while validating your code,", err)
-		return nil
-	}
 
 	//open stream for reading
 	response, err := c.Post(
 		"https://stream.twitter.com/1.1/statuses/filter.json",
-		map[string]string{"follow": Twits}, accessToken)
+		map[string]string{"follow": cfg.Follow}, &(*cfg.AccessToken))
 	if err != nil {
 		fmt.Println("twb: An error occurred while accessing the stream,", err)
 	}
 	stream := bufio.NewReader(response.Body)
+	fmt.Println("twb: Bot ready, listening...")
 
 	return &TwitterBot{
 		Input:  stream,
