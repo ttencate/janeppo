@@ -3,7 +3,6 @@ package main
 import (
 	"./twitterbot"
 	"bufio"
-	"code.google.com/p/gcfg"
 	"code.google.com/p/go.net/html"
 	"encoding/json"
 	"fmt"
@@ -48,15 +47,19 @@ func main() {
 	rand.Seed(time.Now().Unix())
 
 	//Prepare the Twitterbot
+	jsonBlob, ioErr := ioutil.ReadFile("twitter.json")
+	if ioErr != nil {
+		fmt.Printf("Error opening file %s: %s\n", "twitter.json", ioErr)
+		panic("File could not be opened")
+	}
 	var cfg twitterbot.Config
-	err := gcfg.ReadFileInto(&cfg, "twitter.ini")
-	if err != nil {
-		fmt.Println("Error reading twitter config,", err)
-		return
+	jsonErr := json.Unmarshal(jsonBlob, &cfg)
+	if jsonErr != nil {
+		fmt.Printf("Error parsing file %s: %s\n", "twitter.json", jsonErr)
+		panic("Couldn't fetch config from file")
 	}
 	twitterSend := make(chan string)
-	tb := twitterbot.CreateBot(cfg.Oauth.CnsKey, cfg.Oauth.CnsSecret,
-		cfg.Twitter.Follow, twitterSend)
+	tb := twitterbot.CreateBot(&cfg, twitterSend)
 	go tb.ReadContinuous()
 
 	for {
