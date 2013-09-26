@@ -17,8 +17,8 @@ import (
 const (
 	Verbose   = true
 	Quotefile = "collega.txt"
-	Nickname  = "JanEppo"
-	IrcChan   = "#brak"
+	Nickname  = "JanEppoa"
+	IrcChan   = "#braka"
 	IrcServ   = "irc.frozenfractal.com:6667"
 )
 
@@ -59,8 +59,10 @@ func main() {
 		panic("Couldn't fetch config from file")
 	}
 	twitterSend := make(chan string)
-	tb := twitterbot.CreateBot(&cfg, twitterSend)
-	go tb.ReadContinuous()
+	go func(){
+		tb := twitterbot.CreateBot(&cfg, twitterSend)
+		tb.ReadContinuous()
+	}()
 
 	for {
 		select {
