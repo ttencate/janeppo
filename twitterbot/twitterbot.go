@@ -12,8 +12,7 @@ import (
 
 type Tweet struct {
 	User struct {
-		Name  string "name"
-		SName string "screen_name"
+		Screen_Name string
 	}
 	Text string "text"
 }
@@ -113,10 +112,11 @@ func (b *TwitterBot) ReadContinuous() {
 		if jErr != nil {
 			fmt.Println("twb: --- Err parsing stream:", jErr, "---")
 		}
+		fmt.Println(tweet)
 
 		//Print tweet to output channel
-		if len(tweet.User.SName) > 0 && len(tweet.Text) > 0 {
-			b.Output <- fmt.Sprintf("[@%s] %s", tweet.User.SName, tweet.Text)
+		if len(tweet.User.Screen_Name) > 0 && len(tweet.Text) > 0 {
+			b.Output <- fmt.Sprintf("[@%s] %s", tweet.User.Screen_Name, tweet.Text)
 		}
 	}
 }
