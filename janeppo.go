@@ -17,8 +17,8 @@ import (
 const (
 	Verbose   = true
 	Quotefile = "collega.txt"
-	Nickname  = "JanEppoa"
-	IrcChan   = "#braka"
+	Nickname  = "JanEppo"
+	IrcChan   = "#brak"
 	IrcServ   = "irc.frozenfractal.com:6667"
 )
 
