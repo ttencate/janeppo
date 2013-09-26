@@ -1,11 +1,11 @@
 Installation
 ============
 
-Several non-standard packages must be installed for this to work. Using `go get`, install these packages:
+Several non-standard packages must be installed for this to work. To get them,
 
-	"code.google.com/p/gcfg"
-	"code.google.com/p/go.net/html"
-	"github.com/mrjones/oauth"
+	go get "code.google.com/p/gcfg"
+	go get "github.com/mrjones/oauth"
+	go get "code.google.com/p/go.net/html"
 
 To compile JanEppo, you need `net/html`, which is currently in development and not in the main distro.
 
@@ -13,7 +13,7 @@ Now if you're on my machine, go get will download this, but then complain about 
 
 	[/usr/lib/go]/src/pkg/code.google.com/p/go.net/html/token.go
 
-The part between brackets may be different on your machine, it's `GOROOT` as returned by `go env`.  You can search for `io.ErrNoProgress` and replace it by nil (or a more sensible value you have thought about). This will work fine for our purposes.
+The part between brackets may be different on your machine, it's `GOROOT` as returned by `go env`.  You can search for `io.ErrNoProgress` and replace it by `nil` (or a more sensible value you have thought about). This will work fine for our purposes.
 
 When you are done, you should be able to build the project; `html` will be compiled as part of it and (hopefully) work as intended.
 
