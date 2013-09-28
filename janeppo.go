@@ -27,11 +27,12 @@ type Quote struct {
 }
 
 type QuoteBot struct {
-	Nickname string
-	Qdb      []Quote
-	Reader   *bufio.Reader
-	Output   chan string
-	InitLen  int
+	Nickname   string
+	Qdb        []Quote
+	Reader     *bufio.Reader
+	Output     chan string
+	InitLen    int
+	TwitterCtl chan string
 }
 
 func main() {
@@ -42,25 +43,16 @@ func main() {
 
 	eppo := CreateBot(Nickname, IrcChan, reader, ircSend, quotes)
 	defer conn.Close()
+
+	eppo.TwitterCtl = make(chan string)
 	go eppo.ChatContinuous()
 
 	rand.Seed(time.Now().Unix())
 
 	//Prepare the Twitterbot
-	jsonBlob, ioErr := ioutil.ReadFile("twitter.json")
-	if ioErr != nil {
-		fmt.Printf("Error opening file %s: %s\n", "twitter.json", ioErr)
-		panic("File could not be opened")
-	}
-	var cfg twitterbot.Config
-	jsonErr := json.Unmarshal(jsonBlob, &cfg)
-	if jsonErr != nil {
-		fmt.Printf("Error parsing file %s: %s\n", "twitter.json", jsonErr)
-		panic("Couldn't fetch config from file")
-	}
 	twitterSend := make(chan string)
-	go func(){
-		tb := twitterbot.CreateBot(&cfg, twitterSend)
+	go func() {
+		tb := twitterbot.CreateBot(twitterSend, eppo.TwitterCtl)
 		tb.ReadContinuous()
 	}()
 
@@ -76,11 +68,12 @@ func main() {
 
 func CreateBot(nickname, channel string, reader *bufio.Reader, output chan string, qdb []Quote) *QuoteBot {
 	return &QuoteBot{
-		Nickname: nickname,
-		Qdb:      qdb,
-		Reader:   reader,
-		Output:   output,
-		InitLen:  len(qdb),
+		Nickname:   nickname,
+		Qdb:        qdb,
+		Reader:     reader,
+		Output:     output,
+		InitLen:    len(qdb),
+		TwitterCtl: nil,
 	}
 }
 
@@ -380,8 +373,44 @@ func (b *QuoteBot) processChatMsg(channel, sender, message string) {
 		return
 	}
 
+	//Allow for requesting ops in channel
 	if strings.Index(message, "!ops") == 0 && channel != sender {
 		b.Output <- fmt.Sprintf("MODE %s +o %s", channel, sender)
+		return
+	}
+
+	//Various control messages for twitterbot
+	if strings.Index(message, "!fixtwitter") == 0 {
+		b.TwitterCtl <- twitterbot.CTL_RECONNECT
+		b.Output <- fmt.Sprintf("PRIVMSG %s :Walvissen weggejaagd!", channel)
+		return
+	}
+	if strings.Index(message, "!follow ") == 0 {
+		query := message[8:]
+		if len(query) == 0 {
+			b.Output <- fmt.Sprintf("PRIVMSG %s :Daar snap ik helemaal niets van.",
+				channel)
+		}
+		b.TwitterCtl <- twitterbot.CTL_ADD_USER
+		b.TwitterCtl <- query
+		b.TwitterCtl <- twitterbot.CTL_RECONNECT
+		b.Output <- fmt.Sprintf("PRIVMSG %s :Juist.", channel)
+		return
+	}
+	if strings.Index(message, "!unfollow ") == 0 {
+		query := message[10:]
+		if len(query) == 0 {
+			b.Output <- fmt.Sprintf("PRIVMSG %s :Daar snap ik helemaal niets van.",
+				channel)
+		}
+		b.TwitterCtl <- twitterbot.CTL_DEL_USER
+		b.TwitterCtl <- query
+		b.TwitterCtl <- twitterbot.CTL_RECONNECT
+		b.Output <- fmt.Sprintf("PRIVMSG %s :Juist.", channel)
+		return
+	}
+	if strings.Index(message, "!following") == 0 {
+		b.TwitterCtl <- twitterbot.CTL_LIST_USERS
 		return
 	}
 
