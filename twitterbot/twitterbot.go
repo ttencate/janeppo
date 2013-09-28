@@ -55,22 +55,17 @@ func CreateBot(OutputChannel, ControlChannel chan string) *TwitterBot {
 		Input:   nil,
 		Output:  OutputChannel,
 		Control: ControlChannel,
-		Config:  nil,
+		Config:  new(Config),
 	}
 	if !b.ReadConfig() {
 		return nil
 	}
-	b.ResetConnection()
+	b.Connect()
 	go b.ListenControl()
 	return b
 }
 
-func (b *TwitterBot) ResetConnection() {
-	//Close connection, if it exists
-	if b.Conn != nil {
-		(*b.Conn).Close()
-	}
-
+func (b *TwitterBot) Connect() {
 	//Create a consumer and connect to Twitter
 	//prepare oAuth data
 	c := oauth.NewConsumer(
@@ -87,6 +82,8 @@ func (b *TwitterBot) ResetConnection() {
 		map[string]string{"follow": b.Config.Follow}, b.Config.AccessToken)
 	if err != nil {
 		fmt.Println("twb: An error occurred while accessing the stream,", err)
+		b.Output <- "Walvissen vallen het schip aan!"
+		panic("Unhandled error in tweetbot")
 	}
 
 	b.Conn = &response.Body
@@ -95,13 +92,24 @@ func (b *TwitterBot) ResetConnection() {
 }
 
 func (b *TwitterBot) ReadContinuous() {
+	//Because of a nebulous "issue 1725" in http, we can't cleanly reset the connection.
+	//ReadString doesn't return an error, but instead panics if the connection is closed.
+	//Hence, we catch the panic, and then reconnect.
+	//And as long as we're doing that, we might as well make the panic our modus operandi.
+	defer func() {
+		if err := recover(); err != nil {
+			fmt.Println("twb: Recovering from panic in ReadContinuous...")
+			b.Connect()
+			go b.ReadContinuous()
+		}
+	}()
 	for {
 		//Read a tweet
 		line, err := b.Input.ReadString('\n')
 		if err != nil {
 			fmt.Println("twb: --- Err in stream:", err, "---")
 			fmt.Println("twb: Going to reset")
-			b.ResetConnection()
+			panic("Please reset the connection")
 			continue
 		}
 		line = strings.TrimSpace(line)
@@ -134,22 +142,26 @@ func (b *TwitterBot) ListenControl() {
 	for {
 		switch c := <-b.Control; c {
 		case CTL_ADD_USER:
-			b.AddTwit(<-b.Control)
+			if b.AddTwit(<-b.Control) { b.ResetConnection() }
 		case CTL_DEL_USER:
-			b.DelTwit(<-b.Control)
+			if b.DelTwit(<-b.Control) { b.ResetConnection() }
 		case CTL_LIST_USERS:
 			b.ListTwits()
 		case CTL_REREAD_CONFIG:
 			b.ReadConfig()
 			fallthrough
 		case CTL_RECONNECT:
-			//To prevent two threads from running the Reconnect function at the same time,
-			//this just closes the connection. The ReadContinuous function will reconnect.
-			(*b.Conn).Close()
+			b.ResetConnection()
 		default:
 			fmt.Printf("twb: Ignoring invalid control %d\n", c)
 		}
 	}
+}
+
+func (b *TwitterBot) ResetConnection() {
+	//To prevent two threads from running the Reconnect function at the same time,
+	//this just closes the connection. The ReadContinuous function will reconnect.
+	(*b.Conn).Close()
 }
 
 func (b *TwitterBot) ReadConfig() bool {
@@ -177,34 +189,35 @@ func (b *TwitterBot) SaveConfig() bool {
 	return ioutil.WriteFile("twitter.json", jsonBlob, 0644) == nil
 }
 
-func (b *TwitterBot) AddTwit(twit string) {
+func (b *TwitterBot) AddTwit(twit string) bool{
 	user, success := b.userFromName(twit)
 	if !success {
 		b.Output <- "Die persoon ken ik niet."
-		return
+		return false
 	}
 	//Check if it's not already there
 	for _, id := range strings.Split(b.Config.Follow, ",") {
 		if id == user.Id_Str {
 			b.Output <- "Die volg ik al."
-			return
+			return false
 		}
 	}
 	//Add the target
 	b.Config.Follow += "," + user.Id_Str
 	b.SaveConfig()
+	return true
 }
 
-func (b *TwitterBot) DelTwit(twit string) {
+func (b *TwitterBot) DelTwit(twit string) bool {
 	user, success := b.userFromName(twit)
 	if !success {
 		b.Output <- "Die persoon ken ik niet."
-		return
+		return false
 	}
 	//If we're not following that person, quit
 	if strings.Index(b.Config.Follow, user.Id_Str) < 0 {
 		b.Output <- "Die persoon volg ik niet."
-		return
+		return false
 	}
 	//Make new list of followers, omitting the target
 	follows := []string{}
@@ -216,6 +229,7 @@ func (b *TwitterBot) DelTwit(twit string) {
 	//Save changes
 	b.Config.Follow = strings.Join(follows, ",")
 	b.SaveConfig()
+	return true
 }
 
 func (b *TwitterBot) ListTwits() {
@@ -270,7 +284,7 @@ func (b *TwitterBot) userFromName(name string) (User, bool) {
 			AccessTokenUrl:    "https://api.twitter.com/oauth/access_token",
 		})
 	//Request list of users
-	response, err := c.Post(
+	response, err := c.Get(
 		"https://api.twitter.com/1.1/users/show.json",
 		map[string]string{"screen_name": name}, b.Config.AccessToken)
 	if err != nil {

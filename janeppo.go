@@ -391,10 +391,10 @@ func (b *QuoteBot) processChatMsg(channel, sender, message string) {
 			b.Output <- fmt.Sprintf("PRIVMSG %s :Daar snap ik helemaal niets van.",
 				channel)
 		}
-		b.TwitterCtl <- twitterbot.CTL_ADD_USER
-		b.TwitterCtl <- query
-		b.TwitterCtl <- twitterbot.CTL_RECONNECT
-		b.Output <- fmt.Sprintf("PRIVMSG %s :Juist.", channel)
+		go func() {
+			b.TwitterCtl <- twitterbot.CTL_ADD_USER
+			b.TwitterCtl <- query
+		}()
 		return
 	}
 	if strings.Index(message, "!unfollow ") == 0 {
@@ -403,14 +403,16 @@ func (b *QuoteBot) processChatMsg(channel, sender, message string) {
 			b.Output <- fmt.Sprintf("PRIVMSG %s :Daar snap ik helemaal niets van.",
 				channel)
 		}
-		b.TwitterCtl <- twitterbot.CTL_DEL_USER
-		b.TwitterCtl <- query
-		b.TwitterCtl <- twitterbot.CTL_RECONNECT
-		b.Output <- fmt.Sprintf("PRIVMSG %s :Juist.", channel)
+		go func() {
+			b.TwitterCtl <- twitterbot.CTL_DEL_USER
+			b.TwitterCtl <- query
+		}()
 		return
 	}
 	if strings.Index(message, "!following") == 0 {
-		b.TwitterCtl <- twitterbot.CTL_LIST_USERS
+		go func() {
+			b.TwitterCtl <- twitterbot.CTL_LIST_USERS
+		}()
 		return
 	}
 
