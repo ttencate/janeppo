@@ -190,6 +190,33 @@ func (b *QuoteBot) processChatMsg(channel, sender, message string) {
 			"zeggen: \"%s\"", channel, fdb[i].Name, fdb[i].Text)
 		return
 	}
+	
+	//Respond to !watzei _ over _
+	if over := strings.Index(message, " over "); strings.Index(message, "!watzei ") == 0 && over > 0 {
+		//Going to respond with poignant quote.
+		//First, match string to !watzei .* over .*
+		person := strings.TrimSpace(message[8:over])
+		subject := strings.TrimSpace(message[over+6:])
+
+		//We need a random quote satisfying the search query.
+		//Filter the QDB to get a smaller QDB of only matching quotes.
+		filter := func(q Quote) bool {
+			return strings.Contains(strings.ToLower(q.Name), strings.ToLower(person)) &&
+				strings.Contains(strings.ToLower(q.Text), strings.ToLower(subject))
+		}
+		fdb := ApplyFilter(b.Qdb, filter)
+
+		if len(fdb) == 0 {
+			b.Output <- fmt.Sprintf("PRIVMSG %s :Ik ken niemand die zoiets "+
+				"onfatsoenlijks zou zeggen.", channel)
+			return
+		}
+
+		i := rand.Intn(len(fdb))
+		b.Output <- fmt.Sprintf("PRIVMSG %s :Mijn collega %s zou inderdaad "+
+			"zeggen: \"%s\"", channel, fdb[i].Name, fdb[i].Text)
+		return
+	}
 
 	//Respond to !addquote
 	if strings.Index(message, "!addquote ") == 0 {
