@@ -2,11 +2,11 @@ package twitterbot
 
 import (
 	"bufio"
-	"io"
 	"encoding/json"
-	"io/ioutil"
 	"fmt"
 	"github.com/mrjones/oauth"
+	"io"
+	"io/ioutil"
 	"strings"
 )
 
@@ -26,7 +26,7 @@ type TwitterBot struct {
 
 type Config struct {
 	CnsKey, CnsSecret, Follow string
-	AccessToken *oauth.AccessToken
+	AccessToken               *oauth.AccessToken
 }
 
 func main() {
@@ -42,7 +42,7 @@ func main() {
 		fmt.Printf("Error parsing file %s: %s\n", "../twitter.json", jsonErr)
 		panic("Couldn't fetch config from file")
 	}
-	
+
 	b := CreateBot(&cfg, make(chan string))
 	go b.ReadContinuous()
 	for {
@@ -51,7 +51,7 @@ func main() {
 }
 
 func CreateBot(cfg *Config, OutputChannel chan string) *TwitterBot {
-	b :=  &TwitterBot{
+	b := &TwitterBot{
 		Conn:   nil,
 		Input:  nil,
 		Output: OutputChannel,
@@ -66,7 +66,7 @@ func (b *TwitterBot) ResetConnection() {
 	if b.Conn != nil {
 		(*b.Conn).Close()
 	}
-	
+
 	//Create a consumer and connect to Twitter
 	//prepare oAuth data
 	c := oauth.NewConsumer(
@@ -84,8 +84,8 @@ func (b *TwitterBot) ResetConnection() {
 	if err != nil {
 		fmt.Println("twb: An error occurred while accessing the stream,", err)
 	}
-	
-	b.Conn  = &response.Body
+
+	b.Conn = &response.Body
 	b.Input = bufio.NewReader(response.Body)
 	fmt.Println("twb: Bot ready, listening...")
 }
@@ -113,12 +113,12 @@ func (b *TwitterBot) ReadContinuous() {
 			fmt.Println("twb: --- Err parsing stream:", jErr, "---")
 		}
 		fmt.Println(tweet)
-		
+
 		r := strings.NewReplacer(
 			"\n", " ",
 			"\r", " ")
 		tweet.Text = r.Replace(tweet.Text)
-		
+
 		//Print tweet to output channel
 		if len(tweet.User.Screen_Name) > 0 && len(tweet.Text) > 0 {
 			b.Output <- fmt.Sprintf("[@%s] %s", tweet.User.Screen_Name, tweet.Text)
