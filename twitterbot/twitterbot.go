@@ -113,7 +113,12 @@ func (b *TwitterBot) ReadContinuous() {
 			fmt.Println("twb: --- Err parsing stream:", jErr, "---")
 		}
 		fmt.Println(tweet)
-
+		
+		r := strings.NewReplacer(
+			"\n", " ",
+			"\r", " ")
+		tweet.Text = r.Replace(tweet.Text)
+		
 		//Print tweet to output channel
 		if len(tweet.User.Screen_Name) > 0 && len(tweet.Text) > 0 {
 			b.Output <- fmt.Sprintf("[@%s] %s", tweet.User.Screen_Name, tweet.Text)
