@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	Verbose   = true
+	Verbose   = false
 	Quotefile = "collega.txt"
 	Nickname  = "JanEppo"
 	IrcChan   = "#brak"
@@ -60,6 +60,10 @@ func main() {
 		select {
 		case outLine := <-ircSend:
 			fmt.Fprintf(conn, "%s\n", outLine)
+			if !Verbose {
+				// If verbose logging is off, just print whatever we say on IRC
+				fmt.Println(outLine)
+			}
 		case outLine := <-twitterSend:
 			fmt.Fprintf(conn, "PRIVMSG %s :%s\n", IrcChan, outLine)
 		}
@@ -100,7 +104,9 @@ func (b *QuoteBot) ChatLine() {
 	//Test if this is a ping message
 	if components[0] == "PING" {
 		b.Output <- fmt.Sprintf("PONG %s", components[1])
-		fmt.Print("Replying to a ping message from ", components[1])
+		if Verbose {
+			fmt.Print("Replying to a ping message from ", components[1])
+		}
 	}
 
 	if components[1] == "PRIVMSG" {
