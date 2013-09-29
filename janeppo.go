@@ -267,7 +267,7 @@ func (b *QuoteBot) processChatMsg(channel, sender, message string) {
 	if message == "!undo" {
 		if b.InitLen >= len(b.Qdb) {
 			b.Output <- fmt.Sprintf("PRIVMSG %s :Je hebt nog helemaal niks gedaan, "+
-				"+luiwammes.", channel)
+				"luiwammes.", channel)
 			return
 		}
 		b.Output <- fmt.Sprintf("PRIVMSG %s :Ik ken een collega die nog wel een "+
