@@ -31,12 +31,11 @@ This is the list of quotes. It's in JSON format, and might look like this:
 
 More quotes will make for a better bot. You can add quotes from within the bot too, but the file must exist.
 
-twitter.ini
------------
-Needs to contain your own app authentication for oAuth and users to follow on Twitter. A typical file will be
+twitter.json
+------------
+Needs to contain your own app authentication for oAuth and users to follow on Twitter. Made mostly automatically by the accompanying program, but a skeleton file should be provided, and you should probably follow at least one person. An example is given below.
 
-	[oauth]
-	CnsKey = (consumer key goes here)
-	CnsSecret = (consumer secret goes here)
-	[twitter]
-	follow = 123,456 ; comma-separated list of user ids
+	{"CnsKey":"",
+	 "CnsSecret":"",
+	 "Follow":"12345",
+	 "AccessToken":{"Token":"","Secret":""}}
