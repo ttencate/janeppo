@@ -103,9 +103,9 @@ func (b *QuoteBot) ChatLine() {
 
 	//Test if this is a ping message
 	if components[0] == "PING" {
-		b.Output <- fmt.Sprintf("PONG %s", components[1])
+		b.Output <- fmt.Sprintf("PONG %s", strings.TrimSpace(components[1]))
 		if Verbose {
-			fmt.Print("Replying to a ping message from ", components[1])
+			fmt.Print("Replying to a ping message from ", strings.TrimSpace(components[1]))
 		}
 	}
 
