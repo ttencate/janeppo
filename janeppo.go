@@ -10,6 +10,7 @@ import (
 	"math/rand"
 	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -447,6 +448,29 @@ func (b *QuoteBot) processChatMsg(channel, sender, message string) {
 			b.TwitterCtl <- twitterbot.CTL_LIST_USERS
 		}()
 		return
+	}
+	
+	//Link shortener
+	if strings.Contains(message, "http") {
+		//First, check if a link needs to be shortened
+		components := strings.Split(message, " ")
+		for _, piece := range components {
+			if strings.Index(piece, "http") == 0 && len(piece) > 100 {
+				//This one is quite long. Shorten it
+				v := url.Values{"url": {piece}}
+				resp, err := http.Get(strings.Join([]string{"http://nazr.in/",
+					"api/shorten?", v.Encode()}, ""))
+				if err == nil {
+					defer resp.Body.Close()
+					body, err := ioutil.ReadAll(resp.Body)
+					if err == nil {
+						b.Output <- fmt.Sprintf("PRIVMSG %s :%s",
+							channel, strings.TrimSpace(string(body)))
+					}
+				}
+				return
+			}
+		}
 	}
 
 	//Various easter eggs - add more!
