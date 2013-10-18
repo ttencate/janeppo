@@ -22,6 +22,7 @@ const (
 	Nickname  = "JanEppo"
 	IrcChan   = "#brak"
 	IrcServ   = "irc.frozenfractal.com:6667"
+	LongUrl   = 100
 )
 
 type Quote struct {
@@ -455,11 +456,10 @@ func (b *QuoteBot) processChatMsg(channel, sender, message string) {
 		//First, check if a link needs to be shortened
 		components := strings.Split(message, " ")
 		for _, piece := range components {
-			if strings.Index(piece, "http") == 0 && len(piece) > 100 {
+			if strings.Index(piece, "http") == 0 && len(piece) > LongUrl {
 				//This one is quite long. Shorten it
 				v := url.Values{"url": {piece}}
-				resp, err := http.Get(strings.Join([]string{"http://nazr.in/",
-					"api/shorten?", v.Encode()}, ""))
+				resp, err := http.Get("http://nazr.in/api/shorten?" + v.Encode())
 				if err == nil {
 					defer resp.Body.Close()
 					body, err := ioutil.ReadAll(resp.Body)
