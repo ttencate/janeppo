@@ -7,6 +7,7 @@ import (
 	"github.com/mrjones/oauth"
 	"io"
 	"io/ioutil"
+	"log"
 	"strings"
 )
 
@@ -81,14 +82,13 @@ func (b *TwitterBot) Connect() {
 		"https://stream.twitter.com/1.1/statuses/filter.json",
 		map[string]string{"follow": b.Config.Follow}, b.Config.AccessToken)
 	if err != nil {
-		fmt.Println("twb: An error occurred while accessing the stream,", err)
 		b.Output <- "Walvissen vallen het schip aan!"
-		panic("Unhandled error in tweetbot")
+		log.Panicln("twb: An error occurred while accessing the stream,", err)
 	}
 
 	b.Conn = &response.Body
 	b.Input = bufio.NewReader(response.Body)
-	fmt.Println("twb: Bot ready, listening...")
+	log.Println("twb: Bot ready, listening...")
 }
 
 func (b *TwitterBot) ReadContinuous() {
@@ -98,7 +98,7 @@ func (b *TwitterBot) ReadContinuous() {
 	//And as long as we're doing that, we might as well make the panic our modus operandi.
 	defer func() {
 		if err := recover(); err != nil {
-			fmt.Println("twb: Recovering from panic in ReadContinuous...")
+			log.Println("twb: Recovering from panic in ReadContinuous...")
 			b.Connect()
 			go b.ReadContinuous()
 		}
@@ -107,24 +107,22 @@ func (b *TwitterBot) ReadContinuous() {
 		//Read a tweet
 		line, err := b.Input.ReadString('\n')
 		if err != nil {
-			fmt.Println("twb: --- Err in stream:", err, "---")
-			fmt.Println("twb: Going to reset")
-			panic("Please reset the connection")
+			log.Println("twb: --- Err in stream:", err, "---")
+			log.Panicln("twb: Going to reset")
 			continue
 		}
 		line = strings.TrimSpace(line)
 		if line == "" {
 			continue
 		}
-		fmt.Printf("debug: >%s<\n", line)
 
 		//Parse tweet
 		var tweet Tweet
 		jErr := json.Unmarshal([]byte(line), &tweet)
 		if jErr != nil {
-			fmt.Println("twb: --- Err parsing stream:", jErr, "---")
+			log.Println("twb: --- Err parsing stream:", jErr, "---")
 		}
-		fmt.Println(tweet)
+		log.Println(tweet)
 
 		r := strings.NewReplacer(
 			"\n", " ",
@@ -153,7 +151,7 @@ func (b *TwitterBot) ListenControl() {
 		case CTL_RECONNECT:
 			b.ResetConnection()
 		default:
-			fmt.Printf("twb: Ignoring invalid control %d\n", c)
+			log.Printf("twb: Ignoring invalid control %d\n", c)
 		}
 	}
 }
@@ -168,13 +166,13 @@ func (b *TwitterBot) ReadConfig() bool {
 	//Re-read the configuration file used to start the bot
 	jsonBlob, ioErr := ioutil.ReadFile("twitter.json")
 	if ioErr != nil {
-		fmt.Printf("Error opening file %s: %s\n", "twitter.json", ioErr)
+		log.Printf("Error opening file %s: %s\n", "twitter.json", ioErr)
 		return false
 	}
 
 	jsonErr := json.Unmarshal(jsonBlob, b.Config)
 	if jsonErr != nil {
-		fmt.Printf("Error parsing file %s: %s\n", "twitter.json", jsonErr)
+		log.Printf("Error parsing file %s: %s\n", "twitter.json", jsonErr)
 		return false
 	}
 	return true
@@ -183,13 +181,13 @@ func (b *TwitterBot) ReadConfig() bool {
 func (b *TwitterBot) SaveConfig() bool {
 	jsonBlob, jsonErr := json.Marshal(b.Config)
 	if jsonErr != nil {
-		fmt.Println("Error converting to JSON:", jsonErr)
+		log.Println("Error converting to JSON:", jsonErr)
 		return false
 	}
 	return ioutil.WriteFile("twitter.json", jsonBlob, 0644) == nil
 }
 
-func (b *TwitterBot) AddTwit(twit string) bool{
+func (b *TwitterBot) AddTwit(twit string) bool {
 	user, success := b.userFromName(twit)
 	if !success {
 		b.Output <- "Die persoon ken ik niet."
@@ -259,7 +257,7 @@ func (b *TwitterBot) usersFromNumbers(numbers string) ([]User, bool) {
 		"https://api.twitter.com/1.1/users/lookup.json",
 		map[string]string{"user_id": numbers}, b.Config.AccessToken)
 	if err != nil {
-		fmt.Println("twb: Can't lookup users,", err)
+		log.Println("twb: Can't lookup users,", err)
 		return nil, false
 	}
 	jsonBlob, _ := ioutil.ReadAll(response.Body)
@@ -268,7 +266,7 @@ func (b *TwitterBot) usersFromNumbers(numbers string) ([]User, bool) {
 	var users []User
 	jErr := json.Unmarshal(jsonBlob, &users)
 	if jErr != nil {
-		fmt.Println("twb: Can't parse users,", jErr)
+		log.Println("twb: Can't parse users,", jErr)
 		return nil, false
 	}
 	return users, true
@@ -288,7 +286,7 @@ func (b *TwitterBot) userFromName(name string) (User, bool) {
 		"https://api.twitter.com/1.1/users/show.json",
 		map[string]string{"screen_name": name}, b.Config.AccessToken)
 	if err != nil {
-		fmt.Println("twb: Can't lookup user,", err)
+		log.Println("twb: Can't lookup user,", err)
 		return User{Name: "", Screen_Name: "", Id_Str: ""}, false
 	}
 	jsonBlob, _ := ioutil.ReadAll(response.Body)
@@ -297,7 +295,7 @@ func (b *TwitterBot) userFromName(name string) (User, bool) {
 	var user User
 	jErr := json.Unmarshal(jsonBlob, &user)
 	if jErr != nil {
-		fmt.Println("twb: Can't parse user,", jErr)
+		log.Println("twb: Can't parse user,", jErr)
 		return User{Name: "", Screen_Name: "", Id_Str: ""}, false
 	}
 	return user, true
