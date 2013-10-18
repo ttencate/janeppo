@@ -22,8 +22,8 @@ Configuration
 
 You need to supply your own versions of some config files.
 
-collega.txt
------------
+collega.json
+------------
 
 This is the list of quotes. It's in JSON format, and might look like this:
 

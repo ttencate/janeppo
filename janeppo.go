@@ -18,7 +18,7 @@ import (
 
 const (
 	Verbose   = false
-	Quotefile = "collega.txt"
+	Quotefile = "collega.json"
 	Nickname  = "JanEppo"
 	IrcChan   = "#brak"
 	IrcServ   = "irc.frozenfractal.com:6667"
@@ -63,8 +63,8 @@ func main() {
 		select {
 		case outLine := <-ircSend:
 			fmt.Fprintf(conn, "%s\n", outLine)
-			if !Verbose {
-				// If verbose logging is off, just print whatever we say on IRC
+			if !Verbose && strings.Index(outLine, "PONG") != 0 {
+				// If verbose logging is off, just print whatever we say on IRC (except pong)
 				log.Println(outLine)
 			}
 		case outLine := <-twitterSend:
