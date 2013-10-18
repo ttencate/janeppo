@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"math/rand"
 	"net"
 	"net/http"
@@ -63,7 +64,7 @@ func main() {
 			fmt.Fprintf(conn, "%s\n", outLine)
 			if !Verbose {
 				// If verbose logging is off, just print whatever we say on IRC
-				fmt.Println(outLine)
+				log.Println(outLine)
 			}
 		case outLine := <-twitterSend:
 			fmt.Fprintf(conn, "PRIVMSG %s :%s\n", IrcChan, outLine)
@@ -93,11 +94,10 @@ func (b *QuoteBot) ChatLine() {
 
 	line, err := b.Reader.ReadString('\n')
 	if err != nil {
-		fmt.Println("Error reading from the network,", err)
-		panic("Network error")
+		log.Panicln("Error reading from the network,", err)
 	}
 	if Verbose {
-		fmt.Printf("%s", line)
+		log.Printf("%s", line)
 	}
 
 	components := strings.SplitN(line, " ", 4)
@@ -106,15 +106,15 @@ func (b *QuoteBot) ChatLine() {
 	if components[0] == "PING" {
 		b.Output <- fmt.Sprintf("PONG %s", strings.TrimSpace(components[1]))
 		if Verbose {
-			fmt.Print("Replying to a ping message from ", strings.TrimSpace(components[1]))
+			log.Print("Replying to a ping message from ", strings.TrimSpace(components[1]))
 		}
 	}
 
 	if components[1] == "PRIVMSG" {
 		if len(components) < 4 {
 			//This really shouldn't happen, but it does, so let's log it at least
-			fmt.Println("WARNING: the line below seems to be malformed (components)")
-			fmt.Println(line)
+			log.Println("WARNING: the line below seems to be malformed (components)")
+			log.Println(line)
 			b.Output <- fmt.Sprintf("PRIVMSG erik :HALP")
 			return
 		}
@@ -126,19 +126,19 @@ func (b *QuoteBot) ChatLine() {
 	if components[1] == "INVITE" {
 		if len(components) < 4 {
 			//This really shouldn't happen, but it does, so let's log it at least
-			fmt.Println("WARNING: the line below seems to be malformed (components)")
-			fmt.Println(line)
+			log.Println("WARNING: the line below seems to be malformed (components)")
+			log.Println(line)
 			b.Output <- fmt.Sprintf("PRIVMSG erik :HALP")
 			return
 		}
 		b.Output <- fmt.Sprintf("JOIN %s\n", components[3][1:])
-		fmt.Print("Invited to channel ", components[3][1:])
+		log.Println("Invited to channel", components[3][1:])
 	}
 }
 
 func (b *QuoteBot) processChatMsg(channel, sender, message string) {
 	if Verbose {
-		fmt.Printf("Processing message %s(%s): >%s<\n", sender, channel, message)
+		log.Printf("Processing message %s(%s): >%s<\n", sender, channel, message)
 	}
 	if channel == b.Nickname {
 		channel = sender
@@ -246,7 +246,7 @@ func (b *QuoteBot) processChatMsg(channel, sender, message string) {
 		quote[1] = strings.TrimSpace(quote[1])
 
 		b.Qdb = append(b.Qdb, Quote{Name: quote[0], Text: quote[1]})
-		fmt.Printf("Adding quote to QDB.\n  %s: %s\n", quote[0], quote[1])
+		log.Printf("Adding quote to QDB.\n  %s: %s\n", quote[0], quote[1])
 		b.Output <- fmt.Sprintf("PRIVMSG %s :Als ik je goed begrijp, zou %s het "+
 			"volgende zeggen: \"%s\".",
 			channel, quote[0], quote[1])
@@ -486,7 +486,7 @@ func (b *QuoteBot) processChatMsg(channel, sender, message string) {
 				b.Output <- fmt.Sprintf("KICK %s %s :%s", channel, sender,
 					"Je vlinder heeft helaas een orkaan veroorzaakt")
 			}()
-			fmt.Printf("Going to kick %s from %s in two minutes\n", sender, channel)
+			log.Printf("Going to kick %s from %s in two minutes\n", sender, channel)
 		} else {
 			b.Output <- fmt.Sprintf("NAMES %s", channel)
 			line, _ := b.Reader.ReadString('\n')
@@ -501,7 +501,7 @@ func (b *QuoteBot) processChatMsg(channel, sender, message string) {
 					b.Output <- fmt.Sprintf("MODE %s +o %s", channel, sender)
 				}()
 			}
-			fmt.Printf("Going to toggle ops for %s in %s in two minutes",
+			log.Printf("Going to toggle ops for %s in %s in two minutes",
 				sender, channel)
 		}
 		return
@@ -550,12 +550,12 @@ func (b *QuoteBot) ReportP2k(channel string) {
 		http.Get("http://www.p2000zhz-rr.nl/p2000-brandweer-groningen.html")
 	defer resp.Body.Close()
 	if err != nil {
-		fmt.Println("Error in HTTP-get,", err)
+		log.Println("Error in HTTP-get,", err)
 		return
 	}
 	doc, err := html.Parse(resp.Body)
 	if err != nil {
-		fmt.Println("Error in html parser,", err)
+		log.Println("Error in html parser,", err)
 		return
 	}
 	//Now, make a function to recurse the tree (depth-first)
@@ -588,10 +588,9 @@ func (b *QuoteBot) ReportP2k(channel string) {
 func IrcConnect(nick, ircchan, server string) (net.Conn, *bufio.Reader) {
 	conn, err := net.Dial("tcp", server)
 	if err != nil {
-		fmt.Println("Error connecting to the server,", err)
-		panic("Couldn't connect")
+		log.Fatalln("Error connecting to the server,", err)
 	} else {
-		fmt.Println("Connected to server.")
+		log.Println("Connected to server.")
 	}
 
 	fmt.Fprintf(conn, "USER gobot 8 * :Go Bot\n")
@@ -603,7 +602,7 @@ func IrcConnect(nick, ircchan, server string) (net.Conn, *bufio.Reader) {
 
 	fmt.Fprintf(conn, "JOIN %s\n", ircchan)
 	io := bufio.NewReader(conn)
-	fmt.Println("Setup complete. Chat transcript follows.")
+	log.Println("Setup complete.")
 
 	return conn, io
 }
@@ -611,17 +610,15 @@ func IrcConnect(nick, ircchan, server string) (net.Conn, *bufio.Reader) {
 func LoadQuotes() []Quote {
 	jsonBlob, ioErr := ioutil.ReadFile(Quotefile)
 	if ioErr != nil {
-		fmt.Printf("Error opening file %s: %s\n", Quotefile, ioErr)
-		panic("File could not be opened")
+		log.Fatalf("Error opening file %s: %s\n", Quotefile, ioErr)
 	}
 
 	var quotes []Quote
 	jsonErr := json.Unmarshal(jsonBlob, &quotes)
 	if jsonErr != nil {
-		fmt.Printf("Error parsing file %s: %s\n", Quotefile, jsonErr)
-		fmt.Println("Desired format: [ {\"Name\":\"...\", \"Text\":\"...\"}, " +
+		log.Printf("Error parsing file %s: %s\n", Quotefile, jsonErr)
+		log.Fatalln("Desired format: [ {\"Name\":\"...\", \"Text\":\"...\"}, " +
 			"{...}, ..., {...} ]")
-		panic("Couldn't fetch quotes from file")
 	}
 	return quotes
 }
@@ -629,7 +626,7 @@ func LoadQuotes() []Quote {
 func (b *QuoteBot) SaveQuotes() {
 	jsonBlob, jsonErr := json.Marshal(b.Qdb)
 	if jsonErr != nil {
-		fmt.Println("Error converting to JSON:", jsonErr)
+		log.Println("Error converting to JSON:", jsonErr)
 		return
 	}
 	ioutil.WriteFile(Quotefile, jsonBlob, 0644)
