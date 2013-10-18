@@ -197,7 +197,7 @@ func (b *QuoteBot) processChatMsg(channel, sender, message string) {
 			"zeggen: \"%s\"", channel, fdb[i].Name, fdb[i].Text)
 		return
 	}
-	
+
 	//Respond to !watzei _ over _
 	if over := strings.Index(message, " over "); strings.Index(message, "!watzei ") == 0 && over > 0 {
 		//Going to respond with poignant quote.
@@ -449,7 +449,7 @@ func (b *QuoteBot) processChatMsg(channel, sender, message string) {
 		}()
 		return
 	}
-	
+
 	//Link shortener
 	if strings.Contains(message, "http") {
 		//First, check if a link needs to be shortened
