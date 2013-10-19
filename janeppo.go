@@ -548,11 +548,11 @@ func (b *QuoteBot) processChatMsg(channel, sender, message string) {
 func (b *QuoteBot) ReportP2k(channel string) {
 	resp, err :=
 		http.Get("http://www.p2000zhz-rr.nl/p2000-brandweer-groningen.html")
-	defer resp.Body.Close()
 	if err != nil {
 		log.Println("Error in HTTP-get,", err)
 		return
 	}
+	defer resp.Body.Close()
 	doc, err := html.Parse(resp.Body)
 	if err != nil {
 		log.Println("Error in html parser,", err)
