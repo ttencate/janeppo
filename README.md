@@ -47,7 +47,7 @@ Available commands
     `!janeppo` is short for `!collega janeppo`.
 - `!wiezei Query`
     Displays a quote with query in the message
-- `!watzei Someone over Something
+- `!watzei Someone over Something`
     Combination of the above two commands
 - `!addquote Someone: Something`
     Adds a quote to the database.
