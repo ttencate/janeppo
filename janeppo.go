@@ -5,6 +5,7 @@ import (
 	"bufio"
 	"code.google.com/p/go.net/html"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -16,21 +17,21 @@ import (
 	"time"
 )
 
-const (
-	Verbose   = false
-	Quotefile = "collega.json"
-	Nickname  = "JanEppo"
-	IrcChan   = "#brak"
-	IrcServ   = "irc.frozenfractal.com:6667"
-	LongUrl   = 100
-)
+type Config struct {
+	Nickname  string
+	Server    string
+	Channel   string
+	Quotefile string
+	UrlLength int
+	Verbose   bool
+}
 
 type Quote struct {
 	Name, Text string
 }
 
 type QuoteBot struct {
-	Nickname   string
+	Conf       Config
 	Qdb        []Quote
 	Reader     *bufio.Reader
 	Output     chan string
@@ -39,12 +40,18 @@ type QuoteBot struct {
 }
 
 func main() {
+	//Read config
+	var confFile string
+	flag.StringVar(&confFile, "config", "config.json", "Name of configuration file")
+	flag.Parse()
+	conf := LoadConfig(confFile)
+
 	//Prepare the QuoteBot
-	quotes := LoadQuotes()
-	conn, reader := IrcConnect(Nickname, IrcChan, IrcServ)
+	quotes := LoadQuotes(conf.Quotefile)
+	conn, reader := IrcConnect(&conf)
 	ircSend := make(chan string)
 
-	eppo := CreateBot(Nickname, IrcChan, reader, ircSend, quotes)
+	eppo := CreateBot(conf, reader, ircSend, quotes)
 	defer conn.Close()
 
 	eppo.TwitterCtl = make(chan string)
@@ -63,19 +70,19 @@ func main() {
 		select {
 		case outLine := <-ircSend:
 			fmt.Fprintf(conn, "%s\n", outLine)
-			if !Verbose && strings.Index(outLine, "PONG") != 0 {
+			if !conf.Verbose && strings.Index(outLine, "PONG") != 0 {
 				// If verbose logging is off, just print whatever we say on IRC (except pong)
 				log.Println(outLine)
 			}
 		case outLine := <-twitterSend:
-			fmt.Fprintf(conn, "PRIVMSG %s :%s\n", IrcChan, outLine)
+			fmt.Fprintf(conn, "PRIVMSG %s :%s\n", conf.Channel, outLine)
 		}
 	}
 }
 
-func CreateBot(nickname, channel string, reader *bufio.Reader, output chan string, qdb []Quote) *QuoteBot {
+func CreateBot(conf Config, reader *bufio.Reader, output chan string, qdb []Quote) *QuoteBot {
 	return &QuoteBot{
-		Nickname:   nickname,
+		Conf:       conf,
 		Qdb:        qdb,
 		Reader:     reader,
 		Output:     output,
@@ -97,7 +104,7 @@ func (b *QuoteBot) ChatLine() {
 	if err != nil {
 		log.Panicln("Error reading from the network,", err)
 	}
-	if Verbose {
+	if b.Conf.Verbose {
 		log.Printf("%s", line)
 	}
 
@@ -106,7 +113,7 @@ func (b *QuoteBot) ChatLine() {
 	//Test if this is a ping message
 	if components[0] == "PING" {
 		b.Output <- fmt.Sprintf("PONG %s", strings.TrimSpace(components[1]))
-		if Verbose {
+		if b.Conf.Verbose {
 			log.Print("Replying to a ping message from ", strings.TrimSpace(components[1]))
 		}
 	}
@@ -138,10 +145,10 @@ func (b *QuoteBot) ChatLine() {
 }
 
 func (b *QuoteBot) processChatMsg(channel, sender, message string) {
-	if Verbose {
+	if b.Conf.Verbose {
 		log.Printf("Processing message %s(%s): >%s<\n", sender, channel, message)
 	}
-	if channel == b.Nickname {
+	if channel == b.Conf.Nickname {
 		channel = sender
 	}
 
@@ -397,7 +404,7 @@ func (b *QuoteBot) processChatMsg(channel, sender, message string) {
 	}
 
 	//Panic command
-	if strings.Index(message, b.Nickname+": verdwijn") == 0 {
+	if strings.Index(message, b.Conf.Nickname+": verdwijn") == 0 {
 		b.Output <- fmt.Sprintf("QUIT :Ik ga al")
 		panic("Shoo'd!")
 	}
@@ -462,7 +469,7 @@ func (b *QuoteBot) processChatMsg(channel, sender, message string) {
 		//First, check if a link needs to be shortened
 		components := strings.Split(message, " ")
 		for _, piece := range components {
-			if strings.Index(piece, "http") == 0 && len(piece) > LongUrl {
+			if strings.Index(piece, "http") == 0 && len(piece) > b.Conf.UrlLength {
 				//This one is quite long. Shorten it
 				v := url.Values{"url": {piece}}
 				resp, err := http.Get("http://nazr.in/api/shorten?" + v.Encode())
@@ -520,7 +527,7 @@ func (b *QuoteBot) processChatMsg(channel, sender, message string) {
 	}
 
 	//Generic response
-	if strings.Index(message, b.Nickname+": ") == 0 {
+	if strings.Index(message, b.Conf.Nickname+": ") == 0 {
 		replies := [...]string{
 			"Probeer het eens met euclidische meetkunde.",
 			"Weet ik veel...",
@@ -591,8 +598,8 @@ func (b *QuoteBot) ReportP2k(channel string) {
 	b.Output <- fmt.Sprintf("PRIVMSG %s :%s", channel, report)
 }
 
-func IrcConnect(nick, ircchan, server string) (net.Conn, *bufio.Reader) {
-	conn, err := net.Dial("tcp", server)
+func IrcConnect(conf *Config) (net.Conn, *bufio.Reader) {
+	conn, err := net.Dial("tcp", conf.Server)
 	if err != nil {
 		log.Fatalln("Error connecting to the server,", err)
 	} else {
@@ -600,29 +607,29 @@ func IrcConnect(nick, ircchan, server string) (net.Conn, *bufio.Reader) {
 	}
 
 	fmt.Fprintf(conn, "USER gobot 8 * :Go Bot\n")
-	fmt.Fprintf(conn, "NICK %s\n", nick)
+	fmt.Fprintf(conn, "NICK %s\n", conf.Nickname)
 
 	//The server needs some time before it will accept JOIN commands
 	//Hack, obviously. To be replaced by a parser for ':server 001 Welcome blah'
 	time.Sleep(2000 * time.Millisecond)
 
-	fmt.Fprintf(conn, "JOIN %s\n", ircchan)
+	fmt.Fprintf(conn, "JOIN %s\n", conf.Channel)
 	io := bufio.NewReader(conn)
 	log.Println("Setup complete.")
 
 	return conn, io
 }
 
-func LoadQuotes() []Quote {
-	jsonBlob, ioErr := ioutil.ReadFile(Quotefile)
+func LoadQuotes(quotefile string) []Quote {
+	jsonBlob, ioErr := ioutil.ReadFile(quotefile)
 	if ioErr != nil {
-		log.Fatalf("Error opening file %s: %s\n", Quotefile, ioErr)
+		log.Fatalf("Error opening file %s: %s\n", quotefile, ioErr)
 	}
 
 	var quotes []Quote
 	jsonErr := json.Unmarshal(jsonBlob, &quotes)
 	if jsonErr != nil {
-		log.Printf("Error parsing file %s: %s\n", Quotefile, jsonErr)
+		log.Printf("Error parsing file %s: %s\n", quotefile, jsonErr)
 		log.Fatalln("Desired format: [ {\"Name\":\"...\", \"Text\":\"...\"}, " +
 			"{...}, ..., {...} ]")
 	}
@@ -635,7 +642,21 @@ func (b *QuoteBot) SaveQuotes() {
 		log.Println("Error converting to JSON:", jsonErr)
 		return
 	}
-	ioutil.WriteFile(Quotefile, jsonBlob, 0644)
+	ioutil.WriteFile(b.Conf.Quotefile, jsonBlob, 0644)
+}
+
+func LoadConfig(file string) Config {
+	jsonBlob, ioErr := ioutil.ReadFile(file)
+	if ioErr != nil {
+		log.Fatalf("Error opening file %s: %s\n", file, ioErr)
+	}
+
+	var conf Config
+	jsonErr := json.Unmarshal(jsonBlob, &conf)
+	if jsonErr != nil {
+		log.Printf("Error parsing file %s: %s\n", file, jsonErr)
+	}
+	return conf
 }
 
 func ApplyFilter(qdb []Quote, fn func(Quote) bool) []Quote {
