@@ -450,6 +450,12 @@ func (b *QuoteBot) processChatMsg(channel, sender, message string) {
 		}()
 		return
 	}
+	if strings.Index(message, "!link") == 0 {
+		go func() {
+			b.TwitterCtl <- twitterbot.CTL_OUTPUT_LINK
+		}()
+		return
+	}
 
 	//Link shortener
 	if strings.Contains(message, "http") {

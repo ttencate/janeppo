@@ -17,16 +17,18 @@ type User struct {
 	Id_Str      string
 }
 type Tweet struct {
-	User User
-	Text string "text"
+	User   User
+	Id_Str string
+	Text   string "text"
 }
 
 type TwitterBot struct {
-	Conn    *io.ReadCloser
-	Input   *bufio.Reader
-	Output  chan string
-	Control chan string
-	Config  *Config
+	Conn     *io.ReadCloser
+	Input    *bufio.Reader
+	Output   chan string
+	Control  chan string
+	Config   *Config
+	LastLink string
 }
 
 type Config struct {
@@ -40,6 +42,7 @@ const (
 	CTL_ADD_USER      = "add"
 	CTL_DEL_USER      = "del"
 	CTL_LIST_USERS    = "list"
+	CTL_OUTPUT_LINK   = "link"
 )
 
 func main() {
@@ -52,11 +55,12 @@ func main() {
 
 func CreateBot(OutputChannel, ControlChannel chan string) *TwitterBot {
 	b := &TwitterBot{
-		Conn:    nil,
-		Input:   nil,
-		Output:  OutputChannel,
-		Control: ControlChannel,
-		Config:  new(Config),
+		Conn:     nil,
+		Input:    nil,
+		Output:   OutputChannel,
+		Control:  ControlChannel,
+		Config:   new(Config),
+		LastLink: "",
 	}
 	if !b.ReadConfig() {
 		return nil
@@ -131,6 +135,8 @@ func (b *TwitterBot) ReadContinuous() {
 
 		//Print tweet to output channel
 		if len(tweet.User.Screen_Name) > 0 && len(tweet.Text) > 0 {
+			b.LastLink = "https://twitter.com/" + tweet.User.Screen_Name +
+				"/status/" + tweet.Id_Str
 			b.Output <- fmt.Sprintf("[@%s] %s", tweet.User.Screen_Name, tweet.Text)
 		}
 	}
@@ -150,6 +156,8 @@ func (b *TwitterBot) ListenControl() {
 			fallthrough
 		case CTL_RECONNECT:
 			b.ResetConnection()
+		case CTL_OUTPUT_LINK:
+			if(b.LastLink != "") { b.Output <- b.LastLink }
 		default:
 			log.Printf("twb: Ignoring invalid control %d\n", c)
 		}
