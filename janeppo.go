@@ -134,7 +134,9 @@ func (b *QuoteBot) ChatLine() {
 		b.Output <- fmt.Sprintf("MODE %s +o %s",
 			strings.TrimSpace(components[2][1:]), //channel
 			components[0][1:strings.Index(components[0], "!")])     //nick
-		log.Println("Automatic ops for", components[0][1:])
+		if b.Conf.Verbose {
+			log.Println("Automatic ops for", components[0][1:])
+		}
 	}
 }
 
