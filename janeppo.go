@@ -23,6 +23,7 @@ type Config struct {
 	Channel   string
 	Quotefile string
 	UrlLength int
+	AutoOps   bool
 	Verbose   bool
 }
 
@@ -118,29 +119,21 @@ func (b *QuoteBot) ChatLine() {
 		}
 	}
 
-	if components[1] == "PRIVMSG" {
-		if len(components) < 4 {
-			//This really shouldn't happen, but it does, so let's log it at least
-			log.Println("WARNING: the line below seems to be malformed (components)")
-			log.Println(line)
-			b.Output <- fmt.Sprintf("PRIVMSG erik :HALP")
-			return
-		}
+	if components[1] == "PRIVMSG" && len(components) > 3 {
 		b.processChatMsg(components[2], //channel or query
 			components[0][1:strings.Index(components[0], "!")], //nick
 			strings.TrimSpace(components[3][1:]))               //message
 	}
 
-	if components[1] == "INVITE" {
-		if len(components) < 4 {
-			//This really shouldn't happen, but it does, so let's log it at least
-			log.Println("WARNING: the line below seems to be malformed (components)")
-			log.Println(line)
-			b.Output <- fmt.Sprintf("PRIVMSG erik :HALP")
-			return
-		}
+	if components[1] == "INVITE" && len(components) > 3 {
 		b.Output <- fmt.Sprintf("JOIN %s\n", components[3][1:])
 		log.Println("Invited to channel", components[3][1:])
+	}
+
+	if components[1] == "JOIN" && len(components) > 2 && b.Conf.AutoOps {
+		b.Output <- fmt.Sprintf("MODE %s +o %s", components[2][1:], //channel
+			components[0][1:strings.Index(components[0], "!")])     //nick
+		log.Println("Automatic ops for", components[0][1:])
 	}
 }
 
