@@ -22,6 +22,13 @@ Configuration
 
 You need to supply your own versions of some config files.
 
+config.json
+-----------
+
+This file contains basic bot configuration, such as nickname and IRC server. A little program to make it is provided (configedit.go). Alternative configuration files may be loaded like so:
+
+	janeppo.exe -config myfile.json
+
 collega.json
 ------------
 
