@@ -32,7 +32,7 @@ type Quote struct {
 }
 
 type QuoteBot struct {
-	Conf       Config
+	Config
 	Qdb        []Quote
 	Reader     *bufio.Reader
 	Output     chan string
@@ -83,7 +83,7 @@ func main() {
 
 func CreateBot(conf Config, reader *bufio.Reader, output chan string, qdb []Quote) *QuoteBot {
 	return &QuoteBot{
-		Conf:       conf,
+		Config:     conf,
 		Qdb:        qdb,
 		Reader:     reader,
 		Output:     output,
@@ -105,7 +105,7 @@ func (b *QuoteBot) ChatLine() {
 	if err != nil {
 		log.Panicln("Error reading from the network,", err)
 	}
-	if b.Conf.Verbose {
+	if b.Verbose {
 		log.Printf("%s", line)
 	}
 
@@ -114,7 +114,7 @@ func (b *QuoteBot) ChatLine() {
 	//Test if this is a ping message
 	if components[0] == "PING" {
 		b.Output <- fmt.Sprintf("PONG %s", strings.TrimSpace(components[1]))
-		if b.Conf.Verbose {
+		if b.Verbose {
 			log.Print("Replying to a ping message from ", strings.TrimSpace(components[1]))
 		}
 	}
@@ -130,21 +130,21 @@ func (b *QuoteBot) ChatLine() {
 		log.Println("Invited to channel", components[3][1:])
 	}
 
-	if components[1] == "JOIN" && len(components) > 2 && b.Conf.AutoOps {
+	if components[1] == "JOIN" && len(components) > 2 && b.AutoOps {
 		b.Output <- fmt.Sprintf("MODE %s +o %s",
 			strings.TrimSpace(components[2][1:]), //channel
 			components[0][1:strings.Index(components[0], "!")])     //nick
-		if b.Conf.Verbose {
+		if b.Verbose {
 			log.Println("Automatic ops for", components[0][1:])
 		}
 	}
 }
 
 func (b *QuoteBot) processChatMsg(channel, sender, message string) {
-	if b.Conf.Verbose {
+	if b.Verbose {
 		log.Printf("Processing message %s(%s): >%s<\n", sender, channel, message)
 	}
-	if channel == b.Conf.Nickname {
+	if channel == b.Nickname {
 		channel = sender
 	}
 
@@ -400,7 +400,7 @@ func (b *QuoteBot) processChatMsg(channel, sender, message string) {
 	}
 
 	//Panic command
-	if strings.Index(message, b.Conf.Nickname+": verdwijn") == 0 {
+	if strings.Index(message, b.Nickname+": verdwijn") == 0 {
 		b.Output <- fmt.Sprintf("QUIT :Ik ga al")
 		panic("Shoo'd!")
 	}
@@ -465,7 +465,7 @@ func (b *QuoteBot) processChatMsg(channel, sender, message string) {
 		//First, check if a link needs to be shortened
 		components := strings.Split(message, " ")
 		for _, piece := range components {
-			if strings.Index(piece, "http") == 0 && len(piece) > b.Conf.UrlLength {
+			if strings.Index(piece, "http") == 0 && len(piece) > b.UrlLength {
 				//This one is quite long. Shorten it
 				v := url.Values{"url": {piece}}
 				resp, err := http.Get("http://nazr.in/api/shorten?" + v.Encode())
@@ -523,7 +523,7 @@ func (b *QuoteBot) processChatMsg(channel, sender, message string) {
 	}
 
 	//Generic response
-	if strings.Index(message, b.Conf.Nickname+": ") == 0 {
+	if strings.Index(message, b.Nickname+": ") == 0 {
 		replies := [...]string{
 			"Probeer het eens met euclidische meetkunde.",
 			"Weet ik veel...",
@@ -638,7 +638,7 @@ func (b *QuoteBot) SaveQuotes() {
 		log.Println("Error converting to JSON:", jsonErr)
 		return
 	}
-	ioutil.WriteFile(b.Conf.Quotefile, jsonBlob, 0644)
+	ioutil.WriteFile(b.Quotefile, jsonBlob, 0644)
 }
 
 func LoadConfig(file string) Config {
