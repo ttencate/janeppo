@@ -12,6 +12,7 @@ type Config struct {
 	Channel   string
 	Quotefile string
 	UrlLength int
+	AutoOps   bool
 	Verbose   bool
 }
 
@@ -27,6 +28,7 @@ func main() {
 		Channel:   GetString("IRC channel, including '#'"),
 		Quotefile: GetString("Filename of quote database"),
 		UrlLength: GetInt("Length of an url above which the bot will generate a short url"),
+		AutoOps:   GetBool("Automatically give ops to people"),
 		Verbose:   GetBool("Verbose logging"),
 	}
 	jsonBlob, err := json.Marshal(conf)
