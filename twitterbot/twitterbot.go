@@ -111,7 +111,7 @@ func (b *TwitterBot) ReadContinuous() {
 		//Read a tweet
 		line, err := b.Input.ReadString('\n')
 		if err != nil {
-			log.Println("twb: --- Err in stream:", err, "---")
+			log.Println("twb: Err in stream:", err)
 			log.Panicln("twb: Going to reset")
 			continue
 		}
@@ -124,7 +124,7 @@ func (b *TwitterBot) ReadContinuous() {
 		var tweet Tweet
 		jErr := json.Unmarshal([]byte(line), &tweet)
 		if jErr != nil {
-			log.Println("twb: --- Err parsing stream:", jErr, "---")
+			log.Println("twb: Err parsing stream:", jErr)
 		}
 		log.Println(tweet)
 
