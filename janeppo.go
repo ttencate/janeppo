@@ -132,8 +132,8 @@ func (b *QuoteBot) ChatLine() {
 
 	if components[1] == "JOIN" && len(components) > 2 && b.AutoOps {
 		b.Output <- fmt.Sprintf("MODE %s +o %s",
-			strings.TrimSpace(components[2][1:]), //channel
-			components[0][1:strings.Index(components[0], "!")])     //nick
+			strings.TrimSpace(components[2][1:]),               //channel
+			components[0][1:strings.Index(components[0], "!")]) //nick
 		if b.Verbose {
 			log.Println("Automatic ops for", components[0][1:])
 		}
@@ -454,8 +454,13 @@ func (b *QuoteBot) processChatMsg(channel, sender, message string) {
 		return
 	}
 	if strings.Index(message, "!link") == 0 {
+		query := ""
+		if strings.Index(message, "!link ") == 0 {
+			query = message[6:]
+		}
 		go func() {
 			b.TwitterCtl <- twitterbot.CTL_OUTPUT_LINK
+			b.TwitterCtl <- query
 		}()
 		return
 	}

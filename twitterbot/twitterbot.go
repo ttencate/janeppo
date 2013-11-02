@@ -23,12 +23,12 @@ type Tweet struct {
 }
 
 type TwitterBot struct {
-	Conn     *io.ReadCloser
-	Input    *bufio.Reader
-	Output   chan string
-	Control  chan string
-	Config   *Config
-	LastLink string
+	Conn    *io.ReadCloser
+	Input   *bufio.Reader
+	Output  chan string
+	Control chan string
+	Config  *Config
+	History []*Tweet
 }
 
 type Config struct {
@@ -55,12 +55,12 @@ func main() {
 
 func CreateBot(OutputChannel, ControlChannel chan string) *TwitterBot {
 	b := &TwitterBot{
-		Conn:     nil,
-		Input:    nil,
-		Output:   OutputChannel,
-		Control:  ControlChannel,
-		Config:   new(Config),
-		LastLink: "",
+		Conn:    nil,
+		Input:   nil,
+		Output:  OutputChannel,
+		Control: ControlChannel,
+		Config:  new(Config),
+		History: nil,
 	}
 	if !b.ReadConfig() {
 		return nil
@@ -126,17 +126,16 @@ func (b *TwitterBot) ReadContinuous() {
 		if jErr != nil {
 			log.Println("twb: Err parsing stream:", jErr)
 		}
-		log.Println(tweet)
 
 		r := strings.NewReplacer(
 			"\n", " ",
 			"\r", " ")
 		tweet.Text = r.Replace(tweet.Text)
+		log.Println(tweet)
 
 		//Print tweet to output channel
 		if len(tweet.User.Screen_Name) > 0 && len(tweet.Text) > 0 {
-			b.LastLink = "https://twitter.com/" + tweet.User.Screen_Name +
-				"/status/" + tweet.Id_Str
+			b.History = append(b.History, &tweet)
 			b.Output <- fmt.Sprintf("[@%s] %s", tweet.User.Screen_Name, tweet.Text)
 		}
 	}
@@ -146,9 +145,13 @@ func (b *TwitterBot) ListenControl() {
 	for {
 		switch c := <-b.Control; c {
 		case CTL_ADD_USER:
-			if b.AddTwit(<-b.Control) { b.ResetConnection() }
+			if b.AddTwit(<-b.Control) {
+				b.ResetConnection()
+			}
 		case CTL_DEL_USER:
-			if b.DelTwit(<-b.Control) { b.ResetConnection() }
+			if b.DelTwit(<-b.Control) {
+				b.ResetConnection()
+			}
 		case CTL_LIST_USERS:
 			b.ListTwits()
 		case CTL_REREAD_CONFIG:
@@ -157,11 +160,40 @@ func (b *TwitterBot) ListenControl() {
 		case CTL_RECONNECT:
 			b.ResetConnection()
 		case CTL_OUTPUT_LINK:
-			if(b.LastLink != "") { b.Output <- b.LastLink }
+			b.OutputLink(<-b.Control)
 		default:
-			log.Printf("twb: Ignoring invalid control %d\n", c)
+			log.Printf("twb: Ignoring invalid control <%s>\n", c)
 		}
 	}
+}
+
+func (b *TwitterBot) OutputLink(query string) {
+	if len(b.History) == 0 {
+		b.Output <- "Als ik tweets heb herhaald, kun je een link opvragen naar" +
+			" de laatste tweet met '!link', of een link naar de laatste tweet" +
+			" van bijvoorbeeld @ineke met '!link ineke'."
+		return
+	}
+	if query == "ineke" {
+		b.Output <- "Inderdaad. Jammer dat ze niet op Twitter zit hè.."
+		return
+	}
+	//By now, we know there are tweets in the history
+	for i := range b.History {
+		//We want to search the history in reverse: latest tweet gets linked
+		tweet := b.History[len(b.History)-i-1]
+		if strings.Contains((*tweet).User.Screen_Name, query) {
+			b.Output <- LinkToTweet(tweet)
+			return
+		}
+	}
+	b.Output <- "Welnu, ik word misschien wat ouder, maar van die gebruiker" +
+		" heb ik nog nooit gehoord."
+}
+
+func LinkToTweet(t *Tweet) string {
+	return "https://twitter.com/" + (*t).User.Screen_Name +
+		"/status/" + (*t).Id_Str
 }
 
 func (b *TwitterBot) ResetConnection() {
@@ -185,7 +217,6 @@ func (b *TwitterBot) ReadConfig() bool {
 	}
 	return true
 }
-
 func (b *TwitterBot) SaveConfig() bool {
 	jsonBlob, jsonErr := json.Marshal(b.Config)
 	if jsonErr != nil {
@@ -213,7 +244,6 @@ func (b *TwitterBot) AddTwit(twit string) bool {
 	b.SaveConfig()
 	return true
 }
-
 func (b *TwitterBot) DelTwit(twit string) bool {
 	user, success := b.userFromName(twit)
 	if !success {
@@ -237,7 +267,6 @@ func (b *TwitterBot) DelTwit(twit string) bool {
 	b.SaveConfig()
 	return true
 }
-
 func (b *TwitterBot) ListTwits() {
 	users, success := b.usersFromNumbers(b.Config.Follow)
 	if !success {
