@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"log"
 	"strings"
+	"time"
 )
 
 type User struct {
@@ -67,6 +68,7 @@ func CreateBot(OutputChannel, ControlChannel chan string) *TwitterBot {
 	}
 	b.Connect()
 	go b.ListenControl()
+	go func() { for { time.Sleep(24 * time.Hour); b.CleanHistory() }}()
 	return b
 }
 
@@ -140,7 +142,6 @@ func (b *TwitterBot) ReadContinuous() {
 		}
 	}
 }
-
 func (b *TwitterBot) ListenControl() {
 	for {
 		switch c := <-b.Control; c {
@@ -166,6 +167,23 @@ func (b *TwitterBot) ListenControl() {
 		}
 	}
 }
+func (b *TwitterBot) CleanHistory() {
+	//Only save one tweet per username (the last one)
+	hm := make(map[string]*Tweet)
+	for _, t := range b.History {
+		hm[(*t).User.Screen_Name] = t
+	}
+	oldlen := len(b.History)
+
+	hs := make([]*Tweet, 0, len(hm))
+	for _, t := range hm {
+		hs = append(hs, t)
+	}
+	b.History = hs
+	
+	log.Printf("twb: Cleaned history, removed %d elements, %d remain\n",
+		oldlen-len(hs), len(hs))
+}
 
 func (b *TwitterBot) OutputLink(query string) {
 	if len(b.History) == 0 {
@@ -183,15 +201,14 @@ func (b *TwitterBot) OutputLink(query string) {
 		//We want to search the history in reverse: latest tweet gets linked
 		tweet := b.History[len(b.History)-i-1]
 		if strings.Contains((*tweet).User.Screen_Name, query) {
-			b.Output <- LinkToTweet(tweet)
+			b.Output <- tweet.Link()
 			return
 		}
 	}
 	b.Output <- "Welnu, ik word misschien wat ouder, maar van die gebruiker" +
 		" heb ik nog nooit gehoord."
 }
-
-func LinkToTweet(t *Tweet) string {
+func (t *Tweet) Link() string {
 	return "https://twitter.com/" + (*t).User.Screen_Name +
 		"/status/" + (*t).Id_Str
 }
