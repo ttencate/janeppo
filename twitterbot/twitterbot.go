@@ -98,23 +98,13 @@ func (b *TwitterBot) Connect() {
 }
 
 func (b *TwitterBot) ReadContinuous() {
-	//Because of a nebulous "issue 1725" in http, we can't cleanly reset the connection.
-	//ReadString doesn't return an error, but instead panics if the connection is closed.
-	//Hence, we catch the panic, and then reconnect.
-	//And as long as we're doing that, we might as well make the panic our modus operandi.
-	defer func() {
-		if err := recover(); err != nil {
-			log.Println("twb: Recovering from panic in ReadContinuous...")
-			b.Connect()
-			go b.ReadContinuous()
-		}
-	}()
 	for {
 		//Read a tweet
-		line, err := b.Input.ReadString('\n')
+		line, err := b.ReadInputLine()
 		if err != nil {
 			log.Println("twb: Err in stream:", err)
-			log.Panicln("twb: Going to reset")
+			log.Println("twb: Going to reset")
+			b.Connect()
 			continue
 		}
 		line = strings.TrimSpace(line)
@@ -142,6 +132,19 @@ func (b *TwitterBot) ReadContinuous() {
 		}
 	}
 }
+//Because of a nebulous "issue 1725" in http, ReadString doesn't return an error,
+//but instead panics if the connection is closed, even if from the other side.
+func (b *TwitterBot) ReadInputLine() (line string, err error) {
+	defer func(){
+		if pan := recover(); pan != nil {
+			log.Printf("twb: ReadInputLine recovers, %v\n", pan)
+			line = ""
+			err = io.ErrClosedPipe
+		}
+	}()
+	return b.Input.ReadString('\n')
+}
+
 func (b *TwitterBot) ListenControl() {
 	for {
 		switch c := <-b.Control; c {
