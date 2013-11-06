@@ -137,9 +137,8 @@ func (b *TwitterBot) ReadContinuous() {
 func (b *TwitterBot) ReadInputLine() (line string, err error) {
 	defer func(){
 		if pan := recover(); pan != nil {
-			log.Printf("twb: ReadInputLine recovers, %v\n", pan)
 			line = ""
-			err = io.ErrClosedPipe
+			err = fmt.Errorf("%v", pan)
 		}
 	}()
 	return b.Input.ReadString('\n')
