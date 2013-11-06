@@ -102,8 +102,7 @@ func (b *TwitterBot) ReadContinuous() {
 		//Read a tweet
 		line, err := b.ReadInputLine()
 		if err != nil {
-			log.Println("twb: Err in stream:", err)
-			log.Println("twb: Going to reset")
+			log.Println("twb: Err in stream, reconnecting:", err)
 			b.Connect()
 			continue
 		}
