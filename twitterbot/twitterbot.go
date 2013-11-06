@@ -172,20 +172,24 @@ func (b *TwitterBot) ListenControl() {
 }
 func (b *TwitterBot) CleanHistory() {
 	//Only save one tweet per username (the last one)
-	hm := make(map[string]*Tweet)
+	hmap := make(map[string]*Tweet)
+	hord := make([]string, 0)
 	for _, t := range b.History {
-		hm[(*t).User.Screen_Name] = t
+		if _, ok := hmap[(*t).User.Screen_Name]; !ok {
+			hord = append(hord, (*t).User.Screen_Name)
+		}
+		hmap[(*t).User.Screen_Name] = t
 	}
 	oldlen := len(b.History)
 
-	hs := make([]*Tweet, 0, len(hm))
-	for _, t := range hm {
-		hs = append(hs, t)
+	hnew := make([]*Tweet, 0, len(hmap)+1)
+	for _, name := range hord {
+		hnew = append(hnew, hmap[name])
 	}
-	b.History = hs
+	b.History = hnew
 	
 	log.Printf("twb: Cleaned history, removed %d elements, %d remain\n",
-		oldlen-len(hs), len(hs))
+		oldlen-len(hnew), len(hnew))
 }
 
 func (b *TwitterBot) OutputLink(query string) {
