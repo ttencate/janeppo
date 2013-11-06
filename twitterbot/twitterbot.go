@@ -171,22 +171,29 @@ func (b *TwitterBot) ListenControl() {
 	}
 }
 func (b *TwitterBot) CleanHistory() {
+	oldlen := len(b.History)
+	if oldlen < 2 {
+		log.Printf("twb: No need to clean history, %d elements remain\n", oldlen)
+		return
+	}
+
 	//Only save one tweet per username (the last one)
 	hmap := make(map[string]*Tweet)
-	hord := make([]string, 0)
 	for _, t := range b.History {
-		if _, ok := hmap[(*t).User.Screen_Name]; !ok {
-			hord = append(hord, (*t).User.Screen_Name)
-		}
 		hmap[(*t).User.Screen_Name] = t
 	}
-	oldlen := len(b.History)
-
-	hnew := make([]*Tweet, 0, len(hmap)+1)
-	for _, name := range hord {
-		hnew = append(hnew, hmap[name])
+	
+	//Put the saved tweets in a new slice
+	hnew := make([]*Tweet, 0, len(hmap) + 1)
+	for _, t := range hmap {
+		hnew = append(hnew, t)
 	}
-	b.History = hnew
+
+	//Give the bot the newly rewritten History
+	//If we had tweets, append the last one to guarantee that !link is
+	//correct without arguments. Duplicate tweet is not a problem,
+	//and will not multiply after subsequent calls to CleanHistory.
+	b.History = append(hnew, b.History[oldlen-1])
 	
 	log.Printf("twb: Cleaned history, removed %d elements, %d remain\n",
 		oldlen-len(hnew), len(hnew))
