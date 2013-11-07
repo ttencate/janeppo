@@ -194,7 +194,7 @@ func (b *TwitterBot) CleanHistory() {
 	b.History = append(hnew, b.History[oldlen-1])
 	
 	log.Printf("twb: Cleaned history, removed %d elements, %d remain\n",
-		oldlen-len(hnew), len(hnew))
+		oldlen-len(b.History), len(b.History))
 }
 
 func (b *TwitterBot) OutputLink(query string) {
