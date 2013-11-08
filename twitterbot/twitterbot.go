@@ -180,6 +180,9 @@ func (b *TwitterBot) CleanHistory() {
 	for _, t := range b.History {
 		hmap[(*t).User.Screen_Name] = t
 	}
+	//...except for the actual last one in the slice, we'll add that later
+	delete(hmap, (*(b.History[oldlen-1])).User.Screen_Name)
+	//(Rewriting the loop instead causes two tweets by the last user to remain)
 	
 	//Put the saved tweets in a new slice
 	hnew := make([]*Tweet, 0, len(hmap) + 1)
