@@ -68,7 +68,12 @@ func CreateBot(OutputChannel, ControlChannel chan string) *TwitterBot {
 	}
 	b.Connect()
 	go b.ListenControl()
-	go func() { for { time.Sleep(24 * time.Hour); b.CleanHistory() }}()
+	go func() {
+		for {
+			time.Sleep(24 * time.Hour)
+			b.CleanHistory()
+		}
+	}()
 	return b
 }
 
@@ -131,10 +136,11 @@ func (b *TwitterBot) ReadContinuous() {
 		}
 	}
 }
+
 //Because of a nebulous "issue 1725" in http, ReadString doesn't return an error,
 //but instead panics if the connection is closed, even if from the other side.
 func (b *TwitterBot) ReadInputLine() (line string, err error) {
-	defer func(){
+	defer func() {
 		if pan := recover(); pan != nil {
 			line = ""
 			err = fmt.Errorf("%v", pan)
@@ -183,9 +189,9 @@ func (b *TwitterBot) CleanHistory() {
 	//...except for the actual last one in the slice, we'll add that later
 	delete(hmap, (*(b.History[oldlen-1])).User.Screen_Name)
 	//(Rewriting the loop instead causes two tweets by the last user to remain)
-	
+
 	//Put the saved tweets in a new slice
-	hnew := make([]*Tweet, 0, len(hmap) + 1)
+	hnew := make([]*Tweet, 0, len(hmap)+1)
 	for _, t := range hmap {
 		hnew = append(hnew, t)
 	}
@@ -195,7 +201,7 @@ func (b *TwitterBot) CleanHistory() {
 	//correct without arguments. Duplicate tweet is not a problem,
 	//and will not multiply after subsequent calls to CleanHistory.
 	b.History = append(hnew, b.History[oldlen-1])
-	
+
 	log.Printf("twb: Cleaned history, removed %d elements, %d remain\n",
 		oldlen-len(b.History), len(b.History))
 }
