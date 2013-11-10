@@ -397,7 +397,7 @@ func (b *QuoteBot) processChatMsg(channel, sender, message string) {
 			"5711. Zernikelaan 25, KVI",
 		}
 		for _, r := range results {
-			if strings.Contains(r, query) {
+			if strings.Contains(strings.ToLower(r), strings.ToLower(query)) {
 				b.Output <- fmt.Sprintf("PRIVMSG %s :%s", channel, r)
 				return
 			}
