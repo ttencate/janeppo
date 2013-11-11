@@ -160,8 +160,7 @@ func (b *QuoteBot) processChatMsg(channel, sender, message string) {
 			//Filter the QDB to get a smaller QDB of only matching quotes.
 			query := strings.TrimSpace(message[8:])
 			filter := func(q Quote) bool {
-				return strings.Contains(strings.ToLower(q.Name),
-					strings.ToLower(query))
+				return CaseInsContains(q.Name, query)
 			}
 			fdb = ApplyFilter(b.Qdb, filter)
 		}
@@ -185,8 +184,7 @@ func (b *QuoteBot) processChatMsg(channel, sender, message string) {
 		//We need a random quote satisfying the search query.
 		//Filter the QDB to get a smaller QDB of only matching quotes.
 		filter := func(q Quote) bool {
-			return strings.Contains(strings.ToLower(q.Text),
-				strings.ToLower(components[1]))
+			return CaseInsContains(q.Text, components[1])
 		}
 		fdb := ApplyFilter(b.Qdb, filter)
 
@@ -212,8 +210,7 @@ func (b *QuoteBot) processChatMsg(channel, sender, message string) {
 		//We need a random quote satisfying the search query.
 		//Filter the QDB to get a smaller QDB of only matching quotes.
 		filter := func(q Quote) bool {
-			return strings.Contains(strings.ToLower(q.Name), strings.ToLower(person)) &&
-				strings.Contains(strings.ToLower(q.Text), strings.ToLower(subject))
+			return CaseInsContains(q.Name, person) && CaseInsContains(q.Text, subject)
 		}
 		fdb := ApplyFilter(b.Qdb, filter)
 
@@ -397,7 +394,7 @@ func (b *QuoteBot) processChatMsg(channel, sender, message string) {
 			"5711. Zernikelaan 25, KVI",
 		}
 		for _, r := range results {
-			if strings.Contains(strings.ToLower(r), strings.ToLower(query)) {
+			if CaseInsContains(r, query) {
 				b.Output <- fmt.Sprintf("PRIVMSG %s :%s", channel, r)
 				return
 			}
@@ -675,4 +672,8 @@ func ApplyFilter(qdb []Quote, fn func(Quote) bool) []Quote {
 		}
 	}
 	return fdb
+}
+
+func CaseInsContains(haystack, needle string) bool {
+	return strings.Contains(strings.ToLower(haystack), strings.ToLower(needle))
 }
