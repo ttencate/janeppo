@@ -127,7 +127,6 @@ func (b *TwitterBot) ReadContinuous() {
 			"\n", " ",
 			"\r", " ")
 		tweet.Text = r.Replace(tweet.Text)
-		log.Println(tweet)
 
 		//Print tweet to output channel
 		if len(tweet.User.Screen_Name) > 0 && len(tweet.Text) > 0 {

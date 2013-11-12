@@ -67,16 +67,21 @@ func main() {
 		tb.ReadContinuous()
 	}()
 
+	send := func(line string) {
+		fmt.Fprint(conn, line)
+		// If verbose logging is off, just print whatever we say on IRC (except pong)
+		if !conf.Verbose && strings.Index(line, "PONG") != 0 {
+			log.Print(line)
+		}
+	}
+
 	for {
 		select {
 		case outLine := <-ircSend:
-			fmt.Fprintf(conn, "%s\n", outLine)
-			if !conf.Verbose && strings.Index(outLine, "PONG") != 0 {
-				// If verbose logging is off, just print whatever we say on IRC (except pong)
-				log.Println(outLine)
-			}
+			send(fmt.Sprintf("%s\n", outLine))
 		case outLine := <-twitterSend:
-			fmt.Fprintf(conn, "PRIVMSG %s :%s\n", conf.Channel, outLine)
+			send(fmt.Sprintf("PRIVMSG %s :%s\n", conf.Channel, outLine))
+			
 		}
 	}
 }
