@@ -261,7 +261,7 @@ func (b *QuoteBot) processChatMsg(channel, sender, message string) {
 	}
 
 	//Reload the QDB
-	if strings.Index(message, "!herlaad ") == 0 {
+	if strings.Index(message, "!herlaad") == 0 {
 		b.Qdb = LoadQuotes(b.Quotefile)
 		b.Output <- fmt.Sprintf("PRIVMSG %s :Ik bevat nu %d wijsheden van "+
 			"collega's.", channel, len(b.Qdb))
