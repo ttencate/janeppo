@@ -58,6 +58,8 @@ Available commands
     Combination of the above two commands
 - `!addquote Someone: Something`
     Adds a quote to the database.
+- `!herlaad`
+    Reloads the database from disk.
 - `!undo`
     Removes the quote that was last added.
 - `!college`, `!collage`

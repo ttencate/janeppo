@@ -260,6 +260,14 @@ func (b *QuoteBot) processChatMsg(channel, sender, message string) {
 		return
 	}
 
+	//Reload the QDB
+	if strings.Index(message, "!herlaad ") == 0 {
+		b.Qdb = LoadQuotes(b.Quotefile)
+		b.Output <- fmt.Sprintf("PRIVMSG %s :Ik bevat nu %d wijsheden van "+
+			"collega's.", channel, len(b.Qdb))
+		return
+	}
+
 	//Failed !collega
 	if strings.Index(message, "!college") == 0 {
 		b.Output <- fmt.Sprintf("PRIVMSG %s :Ik geef helaas geen colleges meer, "+
