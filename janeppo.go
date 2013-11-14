@@ -655,7 +655,7 @@ func LoadQuotes(quotefile string) []Quote {
 }
 
 func (b *QuoteBot) SaveQuotes() {
-	jsonBlob, jsonErr := json.Marshal(b.Qdb)
+	jsonBlob, jsonErr := json.MarshalIndent(b.Qdb, "", "\t")
 	if jsonErr != nil {
 		log.Println("Error converting to JSON:", jsonErr)
 		return
