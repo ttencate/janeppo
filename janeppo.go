@@ -81,7 +81,7 @@ func main() {
 			send(fmt.Sprintf("%s\n", outLine))
 		case outLine := <-twitterSend:
 			send(fmt.Sprintf("PRIVMSG %s :%s\n", conf.Channel, outLine))
-			
+
 		}
 	}
 }
@@ -154,10 +154,13 @@ func (b *QuoteBot) processChatMsg(channel, sender, message string) {
 	}
 
 	//Respond to !collega
-	if strings.Index(message, "!collega") == 0 {
+	if strings.Index(message, "!collega ") == 0 || message == "!collega" {
 		//Going to respond with sassy quote.
-		var fdb []Quote			
-		if strings.Index(message, "!collega ") == 0 {
+		var fdb []Quote
+		if message == "!collega" {
+			//Just send a random quote from the entire QDB
+			fdb = b.Qdb
+		} else {
 			//We need a random quote satisfying the search query.
 			//Filter the QDB to get a smaller QDB of only matching quotes.
 			query := strings.TrimSpace(message[8:])
@@ -165,9 +168,6 @@ func (b *QuoteBot) processChatMsg(channel, sender, message string) {
 				return CaseInsContains(q.Name, query)
 			}
 			fdb = ApplyFilter(b.Qdb, filter)
-		} else {
-			//Just send a random quote from the entire QDB
-			fdb = b.Qdb
 		}
 
 		if len(fdb) == 0 {
