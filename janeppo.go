@@ -291,6 +291,8 @@ func (b *QuoteBot) processChatMsg(channel, sender, message string) {
 				"luiwammes.", channel)
 			return
 		}
+		log.Printf("Deleting a quote at the request of %s.\n  %s: %s\n",
+			sender, b.Qdb[len(b.Qdb)-1].Name, b.Qdb[len(b.Qdb)-1].Text)
 		b.Output <- fmt.Sprintf("PRIVMSG %s :Ik ken een collega die nog wel een "+
 			"tip voor je heeft.", channel)
 		b.Output <- fmt.Sprintf("PRIVMSG %s :!addquote %s: %s",
