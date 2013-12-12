@@ -123,9 +123,12 @@ func (b *TwitterBot) ReadContinuous() {
 			log.Println("twb: Err parsing stream:", jErr)
 		}
 
+		// Replace needless unicode and newlines
 		r := strings.NewReplacer(
-			"\n", " ",
-			"\r", " ")
+			"\n", " ",  "\r", " ",
+			"’",  "'",  "‘",  "`",
+			"”",  "\"",	"“",  "\"",
+			"…",  "...",)
 		tweet.Text = r.Replace(tweet.Text)
 
 		//Print tweet to output channel
