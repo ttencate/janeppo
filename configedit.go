@@ -14,6 +14,7 @@ type Config struct {
 	UrlLength int
 	AutoOps   bool
 	Verbose   bool
+	Colors    bool
 }
 
 func main() {
@@ -30,6 +31,7 @@ func main() {
 		UrlLength: GetInt("Length of an url above which the bot will generate a short url"),
 		AutoOps:   GetBool("Automatically give ops to people"),
 		Verbose:   GetBool("Verbose logging"),
+		Colors:    GetBool("Make tweetbot output gray"),
 	}
 	jsonBlob, err := json.Marshal(conf)
 	if err != nil {

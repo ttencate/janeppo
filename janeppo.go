@@ -25,6 +25,7 @@ type Config struct {
 	UrlLength int
 	AutoOps   bool
 	Verbose   bool
+	Colors    bool
 }
 
 type Quote struct {
@@ -80,8 +81,10 @@ func main() {
 		case outLine := <-ircSend:
 			send(fmt.Sprintf("%s\n", outLine))
 		case outLine := <-twitterSend:
+			if conf.Colors {
+				outLine = "\x0314" + outLine + "\x0f"
+			}
 			send(fmt.Sprintf("PRIVMSG %s :%s\n", conf.Channel, outLine))
-
 		}
 	}
 }
