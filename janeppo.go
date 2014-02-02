@@ -36,9 +36,39 @@ type QuoteBot struct {
 	Config
 	Qdb        []Quote
 	Reader     *bufio.Reader
-	Output     chan string
+	Output     chan IrcOperation
 	InitLen    int
 	TwitterCtl chan string
+}
+
+type IrcMessage struct {
+	Channel string
+	Text    string
+	Sender  string
+}
+
+type IrcCommand struct {
+	Command   string
+	Arguments string
+}
+
+type IrcOperation interface {
+	String() string
+	Type() string
+}
+
+func (m *IrcMessage) String() string {
+	return fmt.Sprintf("PRIVMSG %s :%s\n", m.Channel, m.Text)
+}
+func (m *IrcMessage) Type() string {
+	return "PRIVMSG"
+}
+
+func (o *IrcCommand) String() string {
+	return o.Command + " " + o.Arguments + "\n"
+}
+func (o *IrcCommand) Type() string {
+	return o.Command
 }
 
 func main() {
@@ -51,7 +81,7 @@ func main() {
 	//Prepare the QuoteBot
 	quotes := LoadQuotes(conf.Quotefile)
 	conn, reader := IrcConnect(&conf)
-	ircSend := make(chan string)
+	ircSend := make(chan IrcOperation)
 
 	eppo := CreateBot(conf, reader, ircSend, quotes)
 	defer conn.Close()
@@ -68,28 +98,31 @@ func main() {
 		tb.ReadContinuous()
 	}()
 
-	send := func(line string) {
-		fmt.Fprint(conn, line)
+	send := func(line IrcOperation) {
+		fmt.Fprint(conn, line.String())
 		// If verbose logging is off, just print whatever we say on IRC (except pong)
-		if !conf.Verbose && strings.Index(line, "PONG") != 0 {
-			log.Print(line)
+		if !conf.Verbose && line.Type() != "PONG" {
+			log.Print(line.String())
 		}
 	}
 
 	for {
 		select {
 		case outLine := <-ircSend:
-			send(fmt.Sprintf("%s\n", outLine))
+			send(outLine)
 		case outLine := <-twitterSend:
 			if conf.Colors {
 				outLine = "\x0314" + outLine + "\x0f"
 			}
-			send(fmt.Sprintf("PRIVMSG %s :%s\n", conf.Channel, outLine))
+			send(&IrcMessage{
+				Channel: conf.Channel,
+				Text:    outLine,
+			})
 		}
 	}
 }
 
-func CreateBot(conf Config, reader *bufio.Reader, output chan string, qdb []Quote) *QuoteBot {
+func CreateBot(conf Config, reader *bufio.Reader, output chan IrcOperation, qdb []Quote) *QuoteBot {
 	return &QuoteBot{
 		Config:     conf,
 		Qdb:        qdb,
@@ -108,65 +141,75 @@ func (b *QuoteBot) ChatContinuous() {
 
 func (b *QuoteBot) ChatLine() {
 	//Read a line, respond if needed
-
 	line, err := b.Reader.ReadString('\n')
 	if err != nil {
 		log.Panicln("Error reading from the network,", err)
 	}
 	if b.Verbose {
-		log.Printf("%s", line)
+		log.Printf("%s\n", line)
 	}
 
 	components := strings.SplitN(line, " ", 4)
 
 	//Test if this is a ping message
-	if components[0] == "PING" {
-		b.Output <- fmt.Sprintf("PONG %s", strings.TrimSpace(components[1]))
+	if components[0] == "PING" && len(components) >= 2 {
+		b.Output <- &IrcCommand{
+			Command:   "PONG",
+			Arguments: strings.TrimSpace(components[1]),
+		}
 		if b.Verbose {
 			log.Print("Replying to a ping message from ", strings.TrimSpace(components[1]))
 		}
 	}
 
-	if components[1] == "PRIVMSG" && len(components) > 3 {
-		b.processChatMsg(components[2], //channel or query
-			components[0][1:strings.Index(components[0], "!")], //nick
-			strings.TrimSpace(components[3][1:]))               //message
+	if components[1] == "PRIVMSG" && len(components) >= 4 {
+		b.processChatMsg(IrcMessage{
+			Channel: components[2],
+			Text:    strings.TrimSpace(components[3][1:]),
+			Sender:  components[0][1:strings.Index(components[0], "!")],
+		})
 	}
 
-	if components[1] == "INVITE" && len(components) > 3 {
-		b.Output <- fmt.Sprintf("JOIN %s\n", components[3][1:])
+	if components[1] == "INVITE" && len(components) >= 4 {
+		b.Output <- &IrcCommand{
+			Command:   "JOIN",
+			Arguments: components[3][1:],
+		}
 		log.Println("Invited to channel", components[3][1:])
 	}
 
-	if components[1] == "JOIN" && len(components) > 2 && b.AutoOps {
-		b.Output <- fmt.Sprintf("MODE %s +o %s",
-			strings.TrimSpace(components[2][1:]),               //channel
-			components[0][1:strings.Index(components[0], "!")]) //nick
+	if components[1] == "JOIN" && len(components) >= 3 && b.Config.AutoOps {
+		b.Output <- &IrcCommand{
+			Command: "MODE",
+			Arguments: fmt.Sprintf("%s +o %s",
+				strings.TrimSpace(components[2][1:]),                //channel
+				components[0][1:strings.Index(components[0], "!")]), //nick
+		}
 		if b.Verbose {
 			log.Println("Automatic ops for", components[0][1:])
 		}
 	}
 }
 
-func (b *QuoteBot) processChatMsg(channel, sender, message string) {
+func (b *QuoteBot) processChatMsg(in IrcMessage) {
 	if b.Verbose {
-		log.Printf("Processing message %s(%s): >%s<\n", sender, channel, message)
+		log.Printf("Processing message %s(%s): >%s<\n", in.Sender, in.Channel, in.Text)
 	}
-	if channel == b.Nickname {
-		channel = sender
+	if in.Channel == b.Nickname {
+		in.Channel = in.Sender
 	}
 
 	//Respond to !collega
-	if strings.Index(message, "!collega ") == 0 || message == "!collega" {
+	if strings.Index(in.Text, "!collega ") == 0 || in.Text == "!collega" {
 		//Going to respond with sassy quote.
 		var fdb []Quote
-		if message == "!collega" {
+		if in.Text == "!collega" {
 			//Just send a random quote from the entire QDB
 			fdb = b.Qdb
 		} else {
 			//We need a random quote satisfying the search query.
 			//Filter the QDB to get a smaller QDB of only matching quotes.
-			query := strings.TrimSpace(message[8:])
+			query := strings.TrimSpace(in.Text[8:])
 			filter := func(q Quote) bool {
 				return CaseInsContains(q.Name, query)
 			}
@@ -174,19 +217,23 @@ func (b *QuoteBot) processChatMsg(channel, sender, message string) {
 		}
 
 		if len(fdb) == 0 {
-			b.Output <- fmt.Sprintf("PRIVMSG %s :Die collega herinner ik me niet.",
-				channel)
+			b.Output <- &IrcMessage{
+				Channel: in.Channel,
+				Text:    "Die collega herinner ik me niet.",
+			}
 			return
 		}
 
 		i := rand.Intn(len(fdb))
-		b.Output <- fmt.Sprintf("PRIVMSG %s :Mijn collega %s zou zeggen: \"%s\"",
-			channel, fdb[i].Name, fdb[i].Text)
+		b.Output <- &IrcMessage{
+			Channel: in.Channel,
+			Text:    fmt.Sprintf("Mijn collega %s zou zeggen: \"%s\"", fdb[i].Name, fdb[i].Text),
+		}
 		return
 	}
 
 	//Respond to !wiezei
-	if components := strings.SplitN(message, " ", 2); components[0] == "!wiezei" && len(components) > 1 {
+	if components := strings.SplitN(in.Text, " ", 2); components[0] == "!wiezei" && len(components) > 1 {
 		//Going to respond with insightful quote.
 
 		//We need a random quote satisfying the search query.
@@ -197,23 +244,27 @@ func (b *QuoteBot) processChatMsg(channel, sender, message string) {
 		fdb := ApplyFilter(b.Qdb, filter)
 
 		if len(fdb) == 0 {
-			b.Output <- fmt.Sprintf("PRIVMSG %s :Ik ken niemand die zoiets "+
-				"onfatsoenlijks zou zeggen.", channel)
+			b.Output <- &IrcMessage{
+				Channel: in.Channel,
+				Text:    "Ik ken niemand die zoiets onfatsoenlijks zou zeggen.",
+			}
 			return
 		}
 
 		i := rand.Intn(len(fdb))
-		b.Output <- fmt.Sprintf("PRIVMSG %s :Mijn collega %s zou inderdaad "+
-			"zeggen: \"%s\"", channel, fdb[i].Name, fdb[i].Text)
+		b.Output <- &IrcMessage{
+			Channel: in.Channel,
+			Text:    fmt.Sprintf("Mijn collega %s zou inderdaad zeggen: \"%s\"", fdb[i].Name, fdb[i].Text),
+		}
 		return
 	}
 
 	//Respond to !watzei _ over _
-	if over := strings.Index(message, " over "); strings.Index(message, "!watzei ") == 0 && over > 0 {
+	if over := strings.Index(in.Text, " over "); strings.Index(in.Text, "!watzei ") == 0 && over > 0 {
 		//Going to respond with poignant quote.
 		//First, match string to !watzei .* over .*
-		person := strings.TrimSpace(message[8:over])
-		subject := strings.TrimSpace(message[over+6:])
+		person := strings.TrimSpace(in.Text[8:over])
+		subject := strings.TrimSpace(in.Text[over+6:])
 
 		//We need a random quote satisfying the search query.
 		//Filter the QDB to get a smaller QDB of only matching quotes.
@@ -223,20 +274,24 @@ func (b *QuoteBot) processChatMsg(channel, sender, message string) {
 		fdb := ApplyFilter(b.Qdb, filter)
 
 		if len(fdb) == 0 {
-			b.Output <- fmt.Sprintf("PRIVMSG %s :Ik ken niemand die zoiets "+
-				"onfatsoenlijks zou zeggen.", channel)
+			b.Output <- &IrcMessage{
+				Channel: in.Channel,
+				Text:    "Ik ken niemand die zoiets onfatsoenlijks zou zeggen.",
+			}
 			return
 		}
 
 		i := rand.Intn(len(fdb))
-		b.Output <- fmt.Sprintf("PRIVMSG %s :Mijn collega %s zou inderdaad "+
-			"zeggen: \"%s\"", channel, fdb[i].Name, fdb[i].Text)
+		b.Output <- &IrcMessage{
+			Channel: in.Channel,
+			Text:    fmt.Sprintf("Mijn collega %s zou inderdaad zeggen: \"%s\"", fdb[i].Name, fdb[i].Text),
+		}
 		return
 	}
 
 	//Respond to !addquote
-	if strings.Index(message, "!addquote ") == 0 {
-		quote := strings.SplitN(message[10:], ": ", 2)
+	if strings.Index(in.Text, "!addquote ") == 0 {
+		quote := strings.SplitN(in.Text[10:], ": ", 2)
 		//We consider certain quotes malformed and send a short help message
 		//to their creator
 		if len(quote) != 2 ||
@@ -245,10 +300,14 @@ func (b *QuoteBot) processChatMsg(channel, sender, message string) {
 			strings.Count(quote[1], "\"") > 0 ||
 			len(strings.TrimSpace(quote[0])) == 0 ||
 			len(strings.TrimSpace(quote[1])) == 0 {
-			b.Output <- fmt.Sprintf("PRIVMSG %s :Daar snap ik helemaal niets van.",
-				channel)
-			b.Output <- fmt.Sprintf("PRIVMSG %s :!addquote Naam[, activiteit,]: "+
-				"Blaat", sender)
+			b.Output <- &IrcMessage{
+				Channel: in.Channel,
+				Text:    "Daar snap ik helemaal niets van.",
+			}
+			b.Output <- &IrcMessage{
+				Channel: in.Sender,
+				Text:    "!addquote Naam[, activiteit,]: Blaat",
+			}
 			return
 		}
 		quote[0] = strings.TrimSpace(quote[0])
@@ -256,50 +315,67 @@ func (b *QuoteBot) processChatMsg(channel, sender, message string) {
 
 		b.Qdb = append(b.Qdb, Quote{Name: quote[0], Text: quote[1]})
 		log.Printf("Adding quote to QDB.\n  %s: %s\n", quote[0], quote[1])
-		b.Output <- fmt.Sprintf("PRIVMSG %s :Als ik je goed begrijp, zou %s het "+
-			"volgende zeggen: \"%s\".",
-			channel, quote[0], quote[1])
+		b.Output <- &IrcMessage{
+			Channel: in.Channel,
+			Text:    fmt.Sprintf("Als ik je goed begrijp, zou %s het volgende zeggen: \"%s\".", quote[0], quote[1]),
+		}
 		b.SaveQuotes()
 		return
 	}
 
 	//Reload the QDB
-	if strings.Index(message, "!herlaad") == 0 {
+	if strings.Index(in.Text, "!herlaad") == 0 {
 		b.Qdb = LoadQuotes(b.Quotefile)
-		b.Output <- fmt.Sprintf("PRIVMSG %s :Ik bevat nu %d wijsheden van "+
-			"collega's.", channel, len(b.Qdb))
+		b.Output <- &IrcMessage{
+			Channel: in.Channel,
+			Text:    fmt.Sprintf("Ik bevat nu %d wijsheden van collega's.", len(b.Qdb)),
+		}
 		return
 	}
 
 	//Failed !collega
-	if strings.Index(message, "!college") == 0 {
-		b.Output <- fmt.Sprintf("PRIVMSG %s :Ik geef helaas geen colleges meer, "+
-			"ik ben met pensioen!", channel)
+	if strings.Index(in.Text, "!college") == 0 {
+		b.Output <- &IrcMessage{
+			Channel: in.Channel,
+			Text:    "Ik geef helaas geen colleges meer, ik ben met pensioen!",
+		}
 		return
 	}
-	if strings.Index(message, "!collage") == 0 {
+	if strings.Index(in.Text, "!collage") == 0 {
 		i := rand.Intn(len(b.Qdb))
-		b.Output <- fmt.Sprintf("PRIVMSG %s :Mijn collega %s zou zeggen: \"%s\"",
-			channel, b.Qdb[i].Text, b.Qdb[i].Name)
+		b.Output <- &IrcMessage{
+			Channel: in.Channel,
+			Text:    fmt.Sprintf("Mijn collega %s zou zeggen: \"%s\"", b.Qdb[i].Text, b.Qdb[i].Name),
+		}
 		return
 	}
-	if strings.Index(message, "!janeppo") == 0 {
-		b.processChatMsg(channel, sender, "!collega ikzelf")
+	if strings.Index(in.Text, "!janeppo") == 0 {
+		b.processChatMsg(IrcMessage{
+			Channel: in.Channel,
+			Sender:  in.Sender,
+			Text:    "!collega ikzelf",
+		})
 	}
 
 	//Support for removing quotes after adding them
-	if message == "!undo" {
+	if in.Text == "!undo" {
 		if b.InitLen >= len(b.Qdb) {
-			b.Output <- fmt.Sprintf("PRIVMSG %s :Je hebt nog helemaal niks gedaan, "+
-				"luiwammes.", channel)
+			b.Output <- &IrcMessage{
+				Channel: in.Channel,
+				Text:    "Je hebt nog helemaal niks gedaan, luiwammes.",
+			}
 			return
 		}
 		log.Printf("Deleting a quote at the request of %s.\n  %s: %s\n",
-			sender, b.Qdb[len(b.Qdb)-1].Name, b.Qdb[len(b.Qdb)-1].Text)
-		b.Output <- fmt.Sprintf("PRIVMSG %s :Ik ken een collega die nog wel een "+
-			"tip voor je heeft.", channel)
-		b.Output <- fmt.Sprintf("PRIVMSG %s :!addquote %s: %s",
-			sender, b.Qdb[len(b.Qdb)-1].Name, b.Qdb[len(b.Qdb)-1].Text)
+			in.Sender, b.Qdb[len(b.Qdb)-1].Name, b.Qdb[len(b.Qdb)-1].Text)
+		b.Output <- &IrcMessage{
+			Channel: in.Channel,
+			Text:    "Ik ken een collega die nog wel een tip voor je heeft.",
+		}
+		b.Output <- &IrcMessage{
+			Channel: in.Sender,
+			Text:    fmt.Sprintf("!addquote %s: %s", b.Qdb[len(b.Qdb)-1].Name, b.Qdb[len(b.Qdb)-1].Text),
+		}
 		ndb := make([]Quote, len(b.Qdb)-1, len(b.Qdb)-1)
 		copy(ndb, b.Qdb)
 		b.Qdb = ndb
@@ -308,45 +384,55 @@ func (b *QuoteBot) processChatMsg(channel, sender, message string) {
 	}
 
 	//Various measurements
-	if strings.Index(message, "!pikk") == 0 {
+	if strings.Index(in.Text, "!pikk") == 0 {
 		size := rand.Float32()
-		if sender == "piet" || sender == "Eggie" {
+		if in.Sender == "piet" || in.Sender == "Eggie" {
 			size += 0.3
 		}
-		b.Output <- fmt.Sprintf("PRIVMSG %s :%3.14f cm 8%s)",
-			channel, size*50, strings.Repeat("=", 1+int(size*10)))
+		b.Output <- &IrcMessage{
+			Channel: in.Channel,
+			Text:    fmt.Sprintf("%3.14f cm 8%s)", size*50, strings.Repeat("=", 1+int(size*10))),
+		}
 		return
 	}
-	if strings.Index(message, "!ijbepikk") == 0 {
+	if strings.Index(in.Text, "!ijbepikk") == 0 {
 		size := rand.Float32()
-		if sender == "ijbema" {
+		if in.Sender == "ijbema" {
 			size += 0.3
 		}
-		b.Output <- fmt.Sprintf("PRIVMSG %s :%3.14f cm -_-%s",
-			channel, size*50, strings.Repeat(";", 1+int(size*10)))
+		b.Output <- &IrcMessage{
+			Channel: in.Channel,
+			Text:    fmt.Sprintf("%3.14f cm -_-%s", size*50, strings.Repeat(";", 1+int(size*10))),
+		}
 		return
 	}
 
 	//GANG!!!
-	if strings.Index(message, "gang") == 0 {
-		b.Output <- fmt.Sprintf("PRIVMSG %s :GANG!!!", channel)
+	if strings.Index(in.Text, "gang") == 0 {
+		b.Output <- &IrcMessage{
+			Channel: in.Channel,
+			Text:    "GANG!!!",
+		}
 		return
 	}
-	if strings.Index(strings.ToLower(message), "lazer") >= 0 {
-		b.Output <- fmt.Sprintf("PRIVMSG %s :LAZERS!", channel)
+	if strings.Index(strings.ToLower(in.Text), "lazer") >= 0 {
+		b.Output <- &IrcMessage{
+			Channel: in.Channel,
+			Text:    "LAZERS!",
+		}
 		return
 	}
 
 	//P2K scanner
-	if message == "!sikknel" {
+	if in.Text == "!sikknel" {
 		//This may take a bit long, so we start a separate thread for it
-		go b.ReportP2k(channel)
+		go b.ReportP2k(in.Channel)
 		return
 	}
 
 	//RUG building finder
-	if strings.Index(message, "!waaris ") == 0 {
-		query := message[8:]
+	if strings.Index(in.Text, "!waaris ") == 0 {
+		query := in.Text[8:]
 		results := [...]string{
 			"1111. Broerstraat 5, Academic building",
 			"1113. O Kijk in t Jatstraat 41/41a, Administrative Information Provision (AIV)",
@@ -413,43 +499,64 @@ func (b *QuoteBot) processChatMsg(channel, sender, message string) {
 		}
 		for _, r := range results {
 			if CaseInsContains(r, query) {
-				b.Output <- fmt.Sprintf("PRIVMSG %s :%s", channel, r)
+				b.Output <- &IrcMessage{
+					Channel: in.Channel,
+					Text:    r,
+				}
 				return
 			}
 		}
-		b.Output <- fmt.Sprintf("PRIVMSG %s :Dat gebouw stond er voor mijn "+
-			"pensioen nog niet, geloof ik.", channel)
+		b.Output <- &IrcMessage{
+			Channel: in.Channel,
+			Text:    "Dat gebouw stond er voor mijn pensioen nog niet, geloof ik.",
+		}
 	}
 
 	//Panic command
-	if strings.Index(message, b.Nickname+": verdwijn") == 0 {
-		b.Output <- fmt.Sprintf("QUIT :Ik ga al")
+	if strings.Index(in.Text, b.Nickname+": verdwijn") == 0 {
+		b.Output <- &IrcCommand{
+			Command:   "QUIT",
+			Arguments: ":Ik ga al",
+		}
 		panic("Shoo'd!")
 	}
 
 	//Allow for entering raw irc commands in a query
-	if strings.Index(message, "!raw ") == 0 && channel == sender {
-		b.Output <- fmt.Sprintf("%s", message[5:])
+	//They would be formatted like "!raw CMD args args :args args"
+	if components := strings.SplitN(in.Text, " ", 3); len(components) == 3 && components[0] == "!raw" && in.Channel == in.Sender {
+		b.Output <- &IrcCommand{
+			Command:   components[1],
+			Arguments: components[2],
+		}
 		return
 	}
 
 	//Allow for requesting ops in channel
-	if strings.Index(message, "!ops") == 0 && channel != sender {
-		b.Output <- fmt.Sprintf("MODE %s +o %s", channel, sender)
+	if strings.Index(in.Text, "!ops") == 0 && in.Channel != in.Sender {
+		b.Output <- &IrcCommand{
+			Command:   "MODE",
+			Arguments: fmt.Sprintf("%s +o %s", in.Channel, in.Sender),
+		}
 		return
 	}
 
 	//Various control messages for twitterbot
-	if strings.Index(message, "!fixtwitter") == 0 {
+	if strings.Index(in.Text, "!fixtwitter") == 0 {
 		b.TwitterCtl <- twitterbot.CTL_RECONNECT
-		b.Output <- fmt.Sprintf("PRIVMSG %s :Walvissen weggejaagd!", channel)
+		b.Output <- &IrcMessage{
+			Channel: in.Channel,
+			Text:    "Walvissen weggejaagd!",
+		}
 		return
 	}
-	if strings.Index(message, "!follow ") == 0 {
-		query := message[8:]
+
+	if strings.Index(in.Text, "!follow ") == 0 {
+		query := in.Text[8:]
 		if len(query) == 0 {
-			b.Output <- fmt.Sprintf("PRIVMSG %s :Daar snap ik helemaal niets van.",
-				channel)
+			b.Output <- &IrcMessage{
+				Channel: in.Channel,
+				Text:    "Daar snap ik helemaal niets van.",
+			}
 		}
 		go func() {
 			b.TwitterCtl <- twitterbot.CTL_ADD_USER
@@ -457,11 +564,13 @@ func (b *QuoteBot) processChatMsg(channel, sender, message string) {
 		}()
 		return
 	}
-	if strings.Index(message, "!unfollow ") == 0 {
-		query := message[10:]
+	if strings.Index(in.Text, "!unfollow ") == 0 {
+		query := in.Text[10:]
 		if len(query) == 0 {
-			b.Output <- fmt.Sprintf("PRIVMSG %s :Daar snap ik helemaal niets van.",
-				channel)
+			b.Output <- &IrcMessage{
+				Channel: in.Channel,
+				Text:    "Daar snap ik helemaal niets van.",
+			}
 		}
 		go func() {
 			b.TwitterCtl <- twitterbot.CTL_DEL_USER
@@ -469,16 +578,16 @@ func (b *QuoteBot) processChatMsg(channel, sender, message string) {
 		}()
 		return
 	}
-	if strings.Index(message, "!following") == 0 {
+	if strings.Index(in.Text, "!following") == 0 {
 		go func() {
 			b.TwitterCtl <- twitterbot.CTL_LIST_USERS
 		}()
 		return
 	}
-	if strings.Index(message, "!link") == 0 {
+	if strings.Index(in.Text, "!link") == 0 {
 		query := ""
-		if strings.Index(message, "!link ") == 0 {
-			query = message[6:]
+		if strings.Index(in.Text, "!link ") == 0 {
+			query = in.Text[6:]
 		}
 		go func() {
 			b.TwitterCtl <- twitterbot.CTL_OUTPUT_LINK
@@ -488,9 +597,9 @@ func (b *QuoteBot) processChatMsg(channel, sender, message string) {
 	}
 
 	//Link shortener
-	if strings.Contains(message, "http") {
+	if strings.Contains(in.Text, "http") {
 		//First, check if a link needs to be shortened
-		components := strings.Split(message, " ")
+		components := strings.Split(in.Text, " ")
 		for _, piece := range components {
 			if strings.Index(piece, "http") == 0 && len(piece) > b.UrlLength {
 				//This one is quite long. Shorten it
@@ -500,8 +609,10 @@ func (b *QuoteBot) processChatMsg(channel, sender, message string) {
 					defer resp.Body.Close()
 					body, err := ioutil.ReadAll(resp.Body)
 					if err == nil {
-						b.Output <- fmt.Sprintf("PRIVMSG %s :%s",
-							channel, strings.TrimSpace(string(body)))
+						b.Output <- &IrcMessage{
+							Channel: in.Channel,
+							Text:    strings.TrimSpace(string(body)),
+						}
 					}
 				}
 				return
@@ -510,47 +621,60 @@ func (b *QuoteBot) processChatMsg(channel, sender, message string) {
 	}
 
 	//Various easter eggs - add more!
-	if strings.Index(message, "!butterfly") == 0 {
-		if channel == sender {
-			b.Output <- fmt.Sprintf("PRIVMSG %s :Dat werkt alleen in een kanaal",
-				sender)
+	if strings.Index(in.Text, "!butterfly") == 0 {
+		if in.Channel == in.Sender {
+			b.Output <- &IrcMessage{
+				Channel: in.Sender,
+				Text:    "Dat werkt alleen in een kanaal",
+			}
 			return
 		}
 		if rand.Float32() < 0.5 {
 			go func() {
 				time.Sleep(120 * time.Second)
-				b.Output <- fmt.Sprintf("KICK %s %s :%s", channel, sender,
-					"Je vlinder heeft helaas een orkaan veroorzaakt")
+				b.Output <- &IrcCommand{
+					Command:   "KICK",
+					Arguments: fmt.Sprintf("%s %s :%s", in.Channel, in.Sender, "Je vlinder heeft helaas een orkaan veroorzaakt"),
+				}
 			}()
-			log.Printf("Going to kick %s from %s in two minutes\n", sender, channel)
+			log.Printf("Going to kick %s from %s in two minutes\n", in.Sender, in.Channel)
 		} else {
-			b.Output <- fmt.Sprintf("NAMES %s", channel)
+			b.Output <- &IrcCommand{
+				Command:   "NAMES",
+				Arguments: in.Channel,
+			}
 			line, _ := b.Reader.ReadString('\n')
-			if strings.Contains(line, "@"+sender) {
+			if strings.Contains(line, "@"+in.Sender) {
 				go func() {
 					time.Sleep(120 * time.Second)
-					b.Output <- fmt.Sprintf("MODE %s -o %s", channel, sender)
+					b.Output <- &IrcCommand{
+						Command:   "MODE",
+						Arguments: fmt.Sprintf("%s -o %s", in.Channel, in.Sender),
+					}
 				}()
 			} else {
 				go func() {
 					time.Sleep(120 * time.Second)
-					b.Output <- fmt.Sprintf("MODE %s +o %s", channel, sender)
+					b.Output <- &IrcCommand{
+						Command:   "MODE",
+						Arguments: fmt.Sprintf("%s +o %s", in.Channel, in.Sender),
+					}
 				}()
 			}
 			log.Printf("Going to toggle ops for %s in %s in two minutes",
-				sender, channel)
+				in.Sender, in.Channel)
 		}
 		return
 	}
-	if strings.Index(message, "!sl") == 0 {
-		b.Output <- fmt.Sprintf("PRIVMSG %s : _||__|  |  ______   ______ ", channel)
-		b.Output <- fmt.Sprintf("PRIVMSG %s :(        | |      | |      |", channel)
-		b.Output <- fmt.Sprintf("PRIVMSG %s :/-()---() ~ ()--() ~ ()--() ", channel)
+	if strings.Index(in.Text, "!sl") == 0 {
+		b.Output <- &IrcMessage{Channel: in.Channel, Text: " _||__|  |  ______   ______ "}
+		b.Output <- &IrcMessage{Channel: in.Channel, Text: "(        | |      | |      |"}
+		b.Output <- &IrcMessage{Channel: in.Channel, Text: "/-()---() ~ ()--() ~ ()--() "}
 		return
 	}
 
 	//Generic response
-	if strings.Index(message, b.Nickname+": ") == 0 {
+	if strings.Index(in.Text, b.Nickname+": ") == 0 {
 		replies := [...]string{
 			"Probeer het eens met euclidische meetkunde.",
 			"Weet ik veel...",
@@ -574,7 +698,10 @@ func (b *QuoteBot) processChatMsg(channel, sender, message string) {
 			"Ik denk dat het iets met priemgetallen te maken heeft.",
 		}
 		i := rand.Intn(len(replies))
-		b.Output <- fmt.Sprintf("PRIVMSG %s :%s", channel, replies[i])
+		b.Output <- &IrcMessage{
+			Channel: in.Channel,
+			Text:    replies[i],
+		}
 		return
 	}
 }
@@ -618,7 +745,10 @@ func (b *QuoteBot) ReportP2k(channel string) {
 	}
 	report = strings.Replace(report, "\n", " ", -1)
 	report = strings.Replace(report, "\r", " ", -1)
-	b.Output <- fmt.Sprintf("PRIVMSG %s :%s", channel, report)
+	b.Output <- &IrcMessage{
+		Channel: channel,
+		Text:    report,
+	}
 }
 
 func IrcConnect(conf *Config) (net.Conn, *bufio.Reader) {
