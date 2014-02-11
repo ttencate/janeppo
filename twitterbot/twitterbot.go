@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"log"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -30,6 +31,7 @@ type TwitterBot struct {
 	Control chan string
 	Config  *Config
 	History []*Tweet
+	Once    *sync.Once
 }
 
 type Config struct {
@@ -94,12 +96,12 @@ func (b *TwitterBot) Connect() {
 		map[string]string{"follow": b.Config.Follow}, b.Config.AccessToken)
 	if err != nil {
 		b.Output <- "Walvissen vallen het schip aan!"
-		log.Panicln("twb: An error occurred while accessing the stream,", err)
+		log.Fatalln("twb: An error occurred while accessing the stream,", err)
 	}
 
 	b.Conn = &response.Body
 	b.Input = bufio.NewReader(response.Body)
-	log.Println("twb: Bot ready, listening...")
+	log.Println("twb: Connection established, listening...")
 }
 
 func (b *TwitterBot) ReadContinuous() {
@@ -108,7 +110,7 @@ func (b *TwitterBot) ReadContinuous() {
 		line, err := b.ReadInputLine()
 		if err != nil {
 			log.Println("twb: Err in stream, reconnecting:", err)
-			b.Connect()
+			b.ResetConnection()
 			continue
 		}
 		line = strings.TrimSpace(line)
@@ -125,10 +127,10 @@ func (b *TwitterBot) ReadContinuous() {
 
 		// Replace needless unicode and newlines
 		r := strings.NewReplacer(
-			"\n", " ",  "\r", " ",
-			"’",  "'",  "‘",  "`",
-			"”",  "\"",	"“",  "\"",
-			"…",  "...",)
+			"\n", " ", "\r", " ",
+			"’", "'", "‘", "`",
+			"”", "\"", "“", "\"",
+			"…", "...")
 		tweet.Text = r.Replace(tweet.Text)
 
 		//Print tweet to output channel
@@ -237,9 +239,13 @@ func (t *Tweet) Link() string {
 }
 
 func (b *TwitterBot) ResetConnection() {
-	//To prevent two threads from running the Reconnect function at the same time,
-	//this just closes the connection. The ReadContinuous function will reconnect.
-	(*b.Conn).Close()
+	// It's possible for multiple threads to reconnect at the same time.
+	// This makes sure only one of them actually does it.
+	b.Once.Do(func() {
+		(*b.Conn).Close()
+		b.Connect()
+		b.Once = new(sync.Once)
+	})
 }
 
 func (b *TwitterBot) ReadConfig() bool {
