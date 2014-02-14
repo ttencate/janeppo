@@ -699,10 +699,11 @@ func (b *QuoteBot) ReportP2k(channel string) {
 	}
 }
 
-func IrcConnect(conf *Config) (net.Conn, *bufio.Reader) {
+func IrcConnect(conf *Config) (bool, net.Conn, *bufio.Reader) {
 	conn, err := net.Dial("tcp", conf.Server)
 	if err != nil {
-		log.Fatalln("Error connecting to the server,", err)
+		log.Println("Error connecting to the server,", err)
+		return false, nil, nil
 	} else {
 		log.Println("Connected to server.")
 	}
@@ -718,7 +719,7 @@ func IrcConnect(conf *Config) (net.Conn, *bufio.Reader) {
 	io := bufio.NewReader(conn)
 	log.Println("Setup complete.")
 
-	return conn, io
+	return true,conn, io
 }
 
 func LoadQuotes(quotefile string) []Quote {

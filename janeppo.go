@@ -19,7 +19,10 @@ func main() {
 
 	//Prepare the QuoteBot
 	quotes := je.LoadQuotes(conf.Quotefile)
-	conn, reader := je.IrcConnect(&conf)
+	ok, conn, reader := je.IrcConnect(&conf)
+  if !ok {
+		log.Fatalln("Couldn't connect to server")
+	}
 	ircSend := make(chan je.IrcOperation)
 
 	eppo := je.CreateBot(conf, reader, ircSend, quotes)
