@@ -121,9 +121,9 @@ func (b *QuoteBot) ChatLine() {
 	if components[1] == "INVITE" && len(components) >= 4 {
 		b.Output <- &IrcCommand{
 			Command:   "JOIN",
-			Arguments: components[3][1:],
+			Arguments: strings.TrimSpace(components[3][1:]),
 		}
-		log.Println("Invited to channel", components[3][1:])
+		log.Println("Invited to channel", strings.TrimSpace(components[3][1:]))
 	}
 
 	if components[1] == "JOIN" && len(components) >= 3 && b.Config.AutoOps {
@@ -719,7 +719,7 @@ func IrcConnect(conf *Config) (bool, net.Conn, *bufio.Reader) {
 	io := bufio.NewReader(conn)
 	log.Println("Setup complete.")
 
-	return true,conn, io
+	return true, conn, io
 }
 
 func LoadQuotes(quotefile string) []Quote {
