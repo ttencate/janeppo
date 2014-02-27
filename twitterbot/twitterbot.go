@@ -110,7 +110,7 @@ func (b *TwitterBot) ReadContinuous() {
 		line, err := b.ReadInputLine()
 		if err != nil {
 			log.Println("twb: Err in stream, reconnecting:", err)
-			b.ResetConnection()
+			b.WantResetConnection()
 			continue
 		}
 		line = strings.TrimSpace(line)
@@ -158,11 +158,11 @@ func (b *TwitterBot) ListenControl() {
 		switch c := <-b.Control; c {
 		case CTL_ADD_USER:
 			if b.AddTwit(<-b.Control) {
-				b.ResetConnection()
+				b.WantResetConnection()
 			}
 		case CTL_DEL_USER:
 			if b.DelTwit(<-b.Control) {
-				b.ResetConnection()
+				b.WantResetConnection()
 			}
 		case CTL_LIST_USERS:
 			b.ListTwits()
@@ -170,7 +170,7 @@ func (b *TwitterBot) ListenControl() {
 			b.ReadConfig()
 			fallthrough
 		case CTL_RECONNECT:
-			b.ResetConnection()
+			b.WantResetConnection()
 		case CTL_OUTPUT_LINK:
 			b.OutputLink(<-b.Control)
 		default:
@@ -238,14 +238,23 @@ func (t *Tweet) Link() string {
 		"/status/" + (*t).Id_Str
 }
 
-func (b *TwitterBot) ResetConnection() {
+func (b *TwitterBot) WantResetConnection() {
 	// It's possible for multiple threads to reconnect at the same time.
 	// This makes sure only one of them actually does it.
 	b.Once.Do(func() {
-		(*b.Conn).Close()
-		b.Connect()
-		b.Once = new(sync.Once)
+		b.ResetConnection()
 	})
+}
+
+func (b *TwitterBot) ResetConnection() {
+	// Actual reconnection code
+	// Sometimes, the connection is already closed.
+	// Sometimes it's just broken somehow, and not closing it would be a leak.
+	if b.Conn != nil {
+		(*b.Conn).Close()
+	}
+	b.Connect()
+	b.Once = new(sync.Once)
 }
 
 func (b *TwitterBot) ReadConfig() bool {
