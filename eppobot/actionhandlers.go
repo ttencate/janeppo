@@ -4,44 +4,52 @@ import (
 	"regexp"
 )
 
-type ActionHandler func(*QuoteBot, *IrcMessage, []string)
+type handler func(*QuoteBot, *IrcMessage, []string)
 
-var messageToAction map[*regexp.Regexp]ActionHandler = map[*regexp.Regexp]ActionHandler{
-	// Handlers for QDB-related queries (read)
-	regexp.MustCompile("^!collega$"):               sayQuote,
-	regexp.MustCompile("^!collega (.*)$"):          sayQuote,
-	regexp.MustCompile("^!wiezei( )(.*)$"):         sayQuote,
-	regexp.MustCompile("^!watzei (.*) over (.*)$"): sayQuote,
-	regexp.MustCompile("^!college$"):               respondCollege,
-	regexp.MustCompile("^!collage$"):               reverseQuote,
-	regexp.MustCompile("^!janeppo$"):               selfQuote,
-	// (write)
-	regexp.MustCompile("^!addquote ([^:]*): (.*)$"): addQuote,
-	regexp.MustCompile("^!undo$"):                   undoAddQuote,
-	regexp.MustCompile("^!herlaad$"):                reloadDatabase,
-	// Random nonsense
-	regexp.MustCompile("^!pikk$"):     measureAttachment,
-	regexp.MustCompile("^!ijbepikk$"): measureFrustration,
-	regexp.MustCompile("^gang"):       simpleResponder("GANG!!!"),
-	regexp.MustCompile("(?i)^lazer"):  simpleResponder("LAZERS!"),
-	regexp.MustCompile("^!sl$"):       train,
-	// Lookup services
-	regexp.MustCompile("^!sikknel$"):     dispatchP2k,
-	regexp.MustCompile("^!waaris (.*)$"): findBuilding,
-	regexp.MustCompile("http"):           shortenLink,
-	// Bot controls
-	regexp.MustCompile("^[^ ]*: verdwijn"):    forceDisconnect,
-	regexp.MustCompile("^!raw ([^ ]*) (.*)$"): rawCommand,
-	regexp.MustCompile("^!ops$"):              giveOps,
-	// Twitterbot controls
-	regexp.MustCompile("^!fixtwitter$"):    twitterReset,
-	regexp.MustCompile("^!follow (.*)$"):   twitterAdd,
-	regexp.MustCompile("^!unfollow (.*)$"): twitterRem,
-	regexp.MustCompile("^!following$"):     twitterList,
-	regexp.MustCompile("^!link( (.*))?$"):  twitterLink,
+type ActionHandler struct{
+	Regexp  *regexp.Regexp
+	Handler handler
 }
 
-func simpleResponder(s string) ActionHandler {
+var messageToAction []ActionHandler = []ActionHandler{
+	// Panic handler
+	ActionHandler{regexp.MustCompile("^(\\w+): verdwijn"),    forceDisconnect},
+	// Handlers for QDB-related queries (read)
+	ActionHandler{regexp.MustCompile("^!collega$"),               sayQuote},
+	ActionHandler{regexp.MustCompile("^!collega (.+)$"),          sayQuote},
+	ActionHandler{regexp.MustCompile("^!wiezei( )(.+)$"),         sayQuote},
+	ActionHandler{regexp.MustCompile("^!watzei (.+) over (.+)$"), sayQuote},
+	ActionHandler{regexp.MustCompile("^!college$"),               respondCollege},
+	ActionHandler{regexp.MustCompile("^!collage$"),               reverseQuote},
+	ActionHandler{regexp.MustCompile("^!janeppo$"),               selfQuote},
+	// (write)
+	ActionHandler{regexp.MustCompile("^!addquote ([^:]+): (.+)$"), addQuote},
+	ActionHandler{regexp.MustCompile("^!undo$"),                   undoAddQuote},
+	ActionHandler{regexp.MustCompile("^!herlaad$"),                reloadDatabase},
+	// Random nonsense
+	ActionHandler{regexp.MustCompile("^!pikk$"),     measureAttachment},
+	ActionHandler{regexp.MustCompile("^!ijbepikk$"), measureFrustration},
+	ActionHandler{regexp.MustCompile("^gang"),       simpleResponder("GANG!!!")},
+	ActionHandler{regexp.MustCompile("(?i)^lazer"),  simpleResponder("LAZERS!")},
+	ActionHandler{regexp.MustCompile("^!sl$"),       train},
+	// Lookup services
+	ActionHandler{regexp.MustCompile("^!sikknel$"),     dispatchP2k},
+	ActionHandler{regexp.MustCompile("^!waaris (.+)$"), findBuilding},
+	ActionHandler{regexp.MustCompile("http"),           shortenLink},
+	// Bot controls
+	ActionHandler{regexp.MustCompile("^!raw ([^ ]+) (.+)$"), rawCommand},
+	ActionHandler{regexp.MustCompile("^!ops$"),              giveOps},
+	// Twitterbot controls
+	ActionHandler{regexp.MustCompile("^!fixtwitter$"),    twitterReset},
+	ActionHandler{regexp.MustCompile("^!follow (.+)$"),   twitterAdd},
+	ActionHandler{regexp.MustCompile("^!unfollow (.+)$"), twitterRem},
+	ActionHandler{regexp.MustCompile("^!following$"),     twitterList},
+	ActionHandler{regexp.MustCompile("^!link( (.+))?$"),  twitterLink},
+	// Generic response
+	ActionHandler{regexp.MustCompile("^(\\w+): "), genericResponse},
+}
+
+func simpleResponder(s string) handler {
 	return func(b *QuoteBot, in *IrcMessage, submatches []string) {
 		b.Output <- &IrcMessage{
 			Channel: in.Channel,
