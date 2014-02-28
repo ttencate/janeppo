@@ -1,11 +1,11 @@
 package eppobot
 
 import (
-	"testing"
-	"strings"
+	"bufio"
 	"fmt"
 	"math/rand"
-	"bufio"
+	"strings"
+	"testing"
 )
 
 // Return a new bot for testing. It has some quotes but no reader.
@@ -82,7 +82,7 @@ func TestPanic(test *testing.T) {
 	}()
 
 	// This should panic the bot (safety valve)
-	b.Reader = bufio.NewReader(strings.NewReader(fmt.Sprintf("someone!somewhere PRIVMSG %s :%s\n", b.Channel, b.Nickname + ": verdwijn")))
+	b.Reader = bufio.NewReader(strings.NewReader(fmt.Sprintf("someone!somewhere PRIVMSG %s :%s\n", b.Channel, b.Nickname+": verdwijn")))
 	go func() {
 		test.Log(<-b.Output)
 	}()
