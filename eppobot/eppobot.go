@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
-	"math/rand"
 	"net"
 	"strings"
 	"time"
@@ -148,38 +147,6 @@ func (b *QuoteBot) processChatMsg(in IrcMessage) {
 			handler(b, &in, matches)
 			return
 		}
-	}
-
-	// Generic response
-	if strings.Index(in.Text, b.Nickname+": ") == 0 {
-		replies := [...]string{
-			"Probeer het eens met euclidische meetkunde.",
-			"Weet ik veel...",
-			"Vraag het een ander, ik ben met pensioen",
-			"Ik zal het even aan Harm vragen.",
-			"Wat zei je? Ik zat even aan Ineke te denken.",
-			"Daar staat wat tegenover...",
-			"Leer eerst eens spellen.",
-			"Denk je echt dat ik je help na alles wat je over me gezegd hebt?",
-			"Dit is meer iets voor mijn collega Moddemeyer",
-			"Kun je dat verklaren?",
-			"Dat is niet bevredigend.",
-			"Daar kun je nog geen conclusie uit trekken.",
-			"Misschien dat Jan Salvador daar meer van weet.",
-			"Begrijp je de vraag eigenlijk wel?",
-			"Misschien moet je het eens van de andere kant bekijken.",
-			"Dat kan efficienter.",
-			"Daar zie ik geen Eulerpad in.",
-			"Ik denk dat ik het begrijp, maar wat doet het?",
-			"Daar kun je beter een graaf bij tekenen.",
-			"Ik denk dat het iets met priemgetallen te maken heeft.",
-		}
-		i := rand.Intn(len(replies))
-		b.Output <- &IrcMessage{
-			Channel: in.Channel,
-			Text:    replies[i],
-		}
-		return
 	}
 }
 
