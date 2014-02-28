@@ -142,9 +142,9 @@ func (b *QuoteBot) processChatMsg(in IrcMessage) {
 		in.Channel = in.Sender
 	}
 
-	for re, handler := range messageToAction {
-		if matches := re.FindStringSubmatch(in.Text); matches != nil {
-			handler(b, &in, matches)
+	for _, ah := range messageToAction {
+		if matches := ah.Regexp.FindStringSubmatch(in.Text); matches != nil {
+			ah.Handler(b, &in, matches)
 			return
 		}
 	}
