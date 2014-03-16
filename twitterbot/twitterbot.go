@@ -242,9 +242,16 @@ func (t *Tweet) Link() string {
 func (b *TwitterBot) WantResetConnection() {
 	// It's possible for multiple threads to reconnect at the same time.
 	// This makes sure only one of them actually does it.
-	b.Once.Do(func() {
+	defer func() {
+		if r := recover(); r != nil {
+			b.Output <- "Critical existence failure!"
+			log.Panicln(r)
+		}
+	}
+	onceBody := func() {
 		b.ResetConnection()
-	})
+	}
+	b.Once.Do(onceBody)
 }
 
 func (b *TwitterBot) ResetConnection() {
