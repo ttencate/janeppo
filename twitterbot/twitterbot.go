@@ -64,6 +64,7 @@ func CreateBot(OutputChannel, ControlChannel chan string) *TwitterBot {
 		Control: ControlChannel,
 		Config:  new(Config),
 		History: nil,
+		Once:    new(sync.Once),
 	}
 	if !b.ReadConfig() {
 		return nil
