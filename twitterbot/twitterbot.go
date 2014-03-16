@@ -247,7 +247,7 @@ func (b *TwitterBot) WantResetConnection() {
 			b.Output <- "Critical existence failure!"
 			log.Panicln(r)
 		}
-	}
+	}()
 	onceBody := func() {
 		b.ResetConnection()
 	}
