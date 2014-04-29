@@ -30,7 +30,7 @@ var messageToAction []ActionHandler = []ActionHandler{
 	ActionHandler{regexp.MustCompile("^!pikk$"), measureAttachment},
 	ActionHandler{regexp.MustCompile("^!ijbepikk$"), measureFrustration},
 	ActionHandler{regexp.MustCompile("^gang"), simpleResponder("GANG!!!")},
-	ActionHandler{regexp.MustCompile("(?i)^lazer"), simpleResponder("LAZERS!")},
+	ActionHandler{regexp.MustCompile("(?i)^la+[sz][eo0]r"), simpleResponder("LAZERS!")},
 	ActionHandler{regexp.MustCompile("^!sl$"), train},
 	// Lookup services
 	ActionHandler{regexp.MustCompile("^!sikknel$"), dispatchP2k},
